@@ -29,7 +29,7 @@
       "logo": "file:../logos/block-logo.png",
       "url": "https://github.com/platforma-open/milaboratories.clonotype-space",
       "support": "mailto:support@milaboratories.com",
-      "description": "Block for construction and visualization of clonotype sequence space.",
+      "description": "Visualize clonotype relationships using k-mer-based dimensionality reduction and UMAP projection.",
       "longDescription": "file:../docs/description.md",
       "changelog": "file:../CHANGELOG.md",
       "tags": [

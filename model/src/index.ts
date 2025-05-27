@@ -58,13 +58,12 @@ function getColumns(ctx: RenderCtx<BlockArgs, UiState>): Columns | undefined {
 export const model = BlockModel.create()
 
   .withArgs<BlockArgs>({
-    // rankingOrder: [],
   })
 
   .withUiState<UiState>({
     title: 'Clonotype Space',
     graphStateUMAP: {
-      title: 'UMAP',
+      title: 'Clonotype Space UMAP',
       template: 'dots',
       currentTab: 'settings',
       layersSettings: {
@@ -92,15 +91,15 @@ export const model = BlockModel.create()
     }], { refsWithEnrichments: true }),
   )
 
-  .output('pf', (ctx) => {
+  .output('msaPf', (ctx) => {
     const columns = getColumns(ctx);
     if (!columns) return undefined;
 
     return createPFrameForGraphs(ctx, columns.props);
   })
 
-  .output('UMAPPf', (ctx): PFrameHandle | undefined => {
-    const pCols = ctx.outputs?.resolve('umap')?.getPColumns();
+  .output('umapPf', (ctx): PFrameHandle | undefined => {
+    const pCols = ctx.outputs?.resolve('umapPf')?.getPColumns();
     if (pCols === undefined) {
       return undefined;
     }
@@ -113,8 +112,7 @@ export const model = BlockModel.create()
   .title((ctx) => ctx.uiState.title ?? 'Clonotype Space')
 
   .sections((_ctx) => ([
-    // { type: 'link', href: '/', label: 'Main' },
-    { type: 'link', href: '/', label: 'Clonotype UMAP' },
+    { type: 'link', href: '/', label: 'Main' },
   ]))
 
   .done();

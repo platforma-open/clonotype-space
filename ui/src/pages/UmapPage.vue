@@ -7,7 +7,7 @@ import {
 } from '@platforma-sdk/model';
 
 import '@milaboratories/graph-maker/styles';
-import { PlAgDataTableToolsPanel, PlBlockPage, PlDropdownRef, PlMultiSequenceAlignment } from '@platforma-sdk/ui-vue';
+import { PlBlockPage, PlDropdownRef, PlMultiSequenceAlignment } from '@platforma-sdk/ui-vue';
 import { useApp } from '../app';
 
 import type { GraphMakerProps } from '@milaboratories/graph-maker';
@@ -71,21 +71,19 @@ const selection = ref<PlSelectionModel>({
       v-model="app.model.ui.graphStateUMAP"
       v-model:selection="selection"
       chartType="scatterplot-umap"
-      :data-state-key="app.model.outputs.UMAPPf"
-      :p-frame="app.model.outputs.UMAPPf"
+      :data-state-key="app.model.outputs.umapPf"
+      :p-frame="app.model.outputs.umapPf"
       :default-options="defaultOptions"
     >
       <template #titleLineSlot>
-        <PlAgDataTableToolsPanel>
-          <PlMultiSequenceAlignment
-            v-model="app.model.ui.alignmentModel"
-            :label-column-option-predicate="isLabelColumnOption"
-            :sequence-column-predicate="isSequenceColumn"
-            :linker-column-predicate="isLinkerColumn"
-            :p-frame="app.model.outputs.pf"
-            :selection="selection"
-          />
-        </PlAgDataTableToolsPanel>
+        <PlMultiSequenceAlignment
+          v-model="app.model.ui.alignmentModel"
+          :label-column-option-predicate="isLabelColumnOption"
+          :sequence-column-predicate="isSequenceColumn"
+          :linker-column-predicate="isLinkerColumn"
+          :p-frame="app.model.outputs.msaPf"
+          :selection="selection"
+        />
       </template>
       <template #settingsSlot>
         <PlDropdownRef

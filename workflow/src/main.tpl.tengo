@@ -8,17 +8,7 @@ pframes := import("@platforma-sdk/workflow-tengo:pframes")
 slices := import("@platforma-sdk/workflow-tengo:slices")
 umapConv := import(":pf-umap-conv")
 
-
-
-// Input will be table with clonotype id | sequence to
-
-// Output should be UMAP coordinates. (maybe embeddings too?)
-
-
-
-
-
-
+pSpec := import("@platforma-sdk/workflow-tengo:pframes.spec")
 
 wf.prepare(func(args){
 	// We need a table with cluster ID (optional) | clonotype id | selected ranking columns
@@ -26,13 +16,11 @@ wf.prepare(func(args){
 	bundleBuilder := wf.createPBundleBuilder()
 	bundleBuilder.ignoreMissingDomains() // to make query work for both bulk and single cell data
 	bundleBuilder.addAnchor("main", args.inputAnchor) 
-	
 
 	// Add full aa sequence column
 	bundleBuilder.addMulti({
 		axes: [{ anchor: "main", idx: 1 }],
 		annotations: {
-			"pl7.app/vdj/isAssemblingFeature": "true",
 			"pl7.app/vdj/isMainSequence": "true"
 		},
 		domain: {
@@ -46,6 +34,8 @@ wf.prepare(func(args){
 })
 
 wf.body(func(args) {
+
+	blockId := wf.blockId().getDataAsJson()
 
 	// Input arguments
 	columns := args.columns
@@ -85,24 +75,32 @@ wf.body(func(args) {
 		run()
 
 
-	umapPf := xsv.importFile(umapClones.getFile("umap.tsv"), "tsv", umapConv.getColumns(datasetSpec))
+	umapPf := xsv.importFile(
+		umapClones.getFile("umap.tsv"),
+		"tsv",
+		umapConv.getColumns(datasetSpec, blockId), 
+		{ splitDataAndSpec: true })
 
-	outputs["umap"] = pframes.exportFrame(umapPf)
+	// Make trace
+    trace := pSpec.makeTrace(datasetSpec,
+        {
+            type: "milaboratories.clonotype-space",
+            importance: 30,
+            label: "Clonotype Space"
+        })
 
-	// Prepare exports
-	exports := {
-        UMAP1: {
-            spec: umapPf["umap1.spec"],
-            data: umapPf["umap1.data"]
-            },
-		UMAP2: {
-            spec: umapPf["umap2.spec"],
-            data: umapPf["umap2.data"]
-            }
+	pf := pframes.pFrameBuilder()
+	for k, v in umapPf {
+		pf.add(k, trace.inject(v.spec), v.data)
 	}
+	pf = pf.build()
 
 	return {
-		outputs: outputs,
-		exports: exports
+		outputs: {
+			umapPf: pframes.exportFrame(pf)
+		},
+		exports: {
+			umapPf: pf
+		}
 	}
 })
