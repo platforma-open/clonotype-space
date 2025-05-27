@@ -1,6 +1,6 @@
 {
   "name": "@platforma-open/milaboratories.clonotype-space.umap",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "type": "module",
   "description": "Block Software",
   "scripts": {
@@ -28,7 +28,10 @@
       "main": {
         "binary": {
           "artifact": "umap-artifact",
-          "cmd": [ "python", "{pkg}/main.py" ]
+          "cmd": [
+            "python",
+            "{pkg}/main.py"
+          ]
         }
       }
     }
