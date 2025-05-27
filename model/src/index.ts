@@ -1,0 +1,122 @@
+import type { GraphMakerState } from '@milaboratories/graph-maker';
+import type {
+  DataInfo,
+  InferOutputsType,
+  PColumn,
+  PColumnValues,
+  PFrameHandle,
+  PlMultiSequenceAlignmentModel,
+  PlRef,
+  RenderCtx,
+  TreeNodeAccessor,
+} from '@platforma-sdk/model';
+import {
+  BlockModel,
+  createPFrameForGraphs,
+} from '@platforma-sdk/model';
+
+export type BlockArgs = {
+  inputAnchor?: PlRef;
+};
+
+export type UiState = {
+  title?: string;
+  graphStateUMAP: GraphMakerState;
+  alignmentModel: PlMultiSequenceAlignmentModel;
+};
+
+type Column = PColumn<DataInfo<TreeNodeAccessor> | TreeNodeAccessor | PColumnValues>;
+
+type Columns = {
+  props: Column[];
+};
+
+function getColumns(ctx: RenderCtx<BlockArgs, UiState>): Columns | undefined {
+  const anchor = ctx.args.inputAnchor;
+  if (anchor === undefined)
+    return undefined;
+
+  const anchorSpec = ctx.resultPool.getPColumnSpecByRef(anchor);
+  if (anchorSpec === undefined)
+    return undefined;
+
+  // all clone properties
+  const props = (ctx.resultPool.getAnchoredPColumns(
+    { main: anchor },
+    [
+      {
+        axes: [{ anchor: 'main', idx: 1 }],
+      },
+    ]) ?? [])
+    .filter((p) => p.spec.annotations?.['pl7.app/sequence/isAnnotation'] !== 'true');
+
+  return {
+    props: props,
+  };
+}
+
+export const model = BlockModel.create()
+
+  .withArgs<BlockArgs>({
+    // rankingOrder: [],
+  })
+
+  .withUiState<UiState>({
+    title: 'Clonotype Space',
+    graphStateUMAP: {
+      title: 'UMAP',
+      template: 'dots',
+      currentTab: 'settings',
+      layersSettings: {
+        dots: {
+          dotFill: '#99E099',
+        },
+      },
+    },
+    alignmentModel: {},
+  })
+
+  .output('inputOptions', (ctx) =>
+    ctx.resultPool.getOptions([{
+      axes: [
+        { name: 'pl7.app/sampleId' },
+        { name: 'pl7.app/vdj/clonotypeKey' },
+      ],
+      annotations: { 'pl7.app/isAnchor': 'true' },
+    }, {
+      axes: [
+        { name: 'pl7.app/sampleId' },
+        { name: 'pl7.app/vdj/scClonotypeKey' },
+      ],
+      annotations: { 'pl7.app/isAnchor': 'true' },
+    }], { refsWithEnrichments: true }),
+  )
+
+  .output('pf', (ctx) => {
+    const columns = getColumns(ctx);
+    if (!columns) return undefined;
+
+    return createPFrameForGraphs(ctx, columns.props);
+  })
+
+  .output('UMAPPf', (ctx): PFrameHandle | undefined => {
+    const pCols = ctx.outputs?.resolve('umap')?.getPColumns();
+    if (pCols === undefined) {
+      return undefined;
+    }
+
+    return createPFrameForGraphs(ctx, pCols);
+  })
+
+  .output('isRunning', (ctx) => ctx.outputs?.getIsReadyOrError() === false)
+
+  .title((ctx) => ctx.uiState.title ?? 'Clonotype Space')
+
+  .sections((_ctx) => ([
+    // { type: 'link', href: '/', label: 'Main' },
+    { type: 'link', href: '/', label: 'Clonotype UMAP' },
+  ]))
+
+  .done();
+
+export type BlockOutputs = InferOutputsType<typeof model>;

@@ -1,0 +1,50 @@
+{
+  "name": "@platforma-open/milaboratories.clonotype-space",
+  "version": "1.0.0",
+  "scripts": {
+    "pretty": "prettier --write \"./**/*.{js,jsx,mjs,cjs,ts,tsx,json,vue}\"",
+    "build": "rm -rf ./block-pack && block-tools pack",
+    "mark-stable": "block-tools mark-stable -r 's3://milab-euce1-prod-pkgs-s3-block-registry/pub/releases/?region=eu-central-1'",
+    "prepublishOnly": "block-tools pack && block-tools publish -r 's3://milab-euce1-prod-pkgs-s3-block-registry/pub/releases/?region=eu-central-1'",
+    "do-pack": "rm -f *.tgz && block-tools pack && pnpm pack && mv *.tgz package.tgz"
+  },
+  "files": [
+    "index.d.ts",
+    "index.js"
+  ],
+  "dependencies": {
+    "@platforma-sdk/model": "catalog:",
+    "@platforma-open/milaboratories.clonotype-space.workflow": "workspace:*",
+    "@platforma-open/milaboratories.clonotype-space.model": "workspace:*",
+    "@platforma-open/milaboratories.clonotype-space.ui": "workspace:*"
+  },
+  "block": {
+    "components": {
+      "workflow": "@platforma-open/milaboratories.clonotype-space.workflow/dist/tengo/tpl/main.plj.gz",
+      "model": "@platforma-open/milaboratories.clonotype-space.model/dist/model.json",
+      "ui": "@platforma-open/milaboratories.clonotype-space.ui/dist"
+    },
+    "meta": {
+      "title": "Clonotype Space",
+      "logo": "file:../logos/block-logo.png",
+      "url": "https://github.com/platforma-open/milaboratories.clonotype-space",
+      "support": "mailto:support@milaboratories.com",
+      "description": "Block for construction and visualization of clonotype sequence space.",
+      "longDescription": "file:../docs/description.md",
+      "changelog": "file:../CHANGELOG.md",
+      "tags": [
+        "airr",
+        "downstream"
+      ],
+      "organization": {
+        "name": "MiLaboratories Inc",
+        "url": "https://milaboratories.com/",
+        "logo": "file:../logos/organization-logo.png"
+      }
+    }
+  },
+  "devDependencies": {
+    "@platforma-sdk/block-tools": "catalog:"
+  },
+  "packageManager": "pnpm@9.12.0"
+}
