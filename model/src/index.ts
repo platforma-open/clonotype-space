@@ -75,6 +75,8 @@ export const model = BlockModel.create()
     alignmentModel: {},
   })
 
+  .argsValid((ctx) => ctx.args.inputAnchor !== undefined)
+
   .output('inputOptions', (ctx) =>
     ctx.resultPool.getOptions([{
       axes: [

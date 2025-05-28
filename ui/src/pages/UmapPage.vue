@@ -7,7 +7,7 @@ import {
 } from '@platforma-sdk/model';
 
 import '@milaboratories/graph-maker/styles';
-import { PlBlockPage, PlDropdownRef, PlMultiSequenceAlignment } from '@platforma-sdk/ui-vue';
+import { PlBlockPage, PlBtnGhost, PlDropdownRef, PlMultiSequenceAlignment, PlSlideModal } from '@platforma-sdk/ui-vue';
 import { useApp } from '../app';
 
 import type { GraphMakerProps } from '@milaboratories/graph-maker';
@@ -63,6 +63,7 @@ const selection = ref<PlSelectionModel>({
   selectedKeys: [],
 });
 
+const multipleSequenceAlignmentOpen = ref(false);
 </script>
 
 <template>
@@ -76,14 +77,12 @@ const selection = ref<PlSelectionModel>({
       :default-options="defaultOptions"
     >
       <template #titleLineSlot>
-        <PlMultiSequenceAlignment
-          v-model="app.model.ui.alignmentModel"
-          :label-column-option-predicate="isLabelColumnOption"
-          :sequence-column-predicate="isSequenceColumn"
-          :linker-column-predicate="isLinkerColumn"
-          :p-frame="app.model.outputs.msaPf"
-          :selection="selection"
-        />
+        <PlBtnGhost
+          icon="dna"
+          @click.stop="() => (multipleSequenceAlignmentOpen = true)"
+        >
+          Multiple Sequence Alignment
+        </PlBtnGhost>
       </template>
       <template #settingsSlot>
         <PlDropdownRef
@@ -95,5 +94,16 @@ const selection = ref<PlSelectionModel>({
         />
       </template>
     </GraphMaker>
+    <PlSlideModal v-model="multipleSequenceAlignmentOpen" width="100%">
+      <template #title>Multiple Sequence Alignment</template>
+      <PlMultiSequenceAlignment
+        v-model="app.model.ui.alignmentModel"
+        :label-column-option-predicate="isLabelColumnOption"
+        :sequence-column-predicate="isSequenceColumn"
+        :linker-column-predicate="isLinkerColumn"
+        :p-frame="app.model.outputs.msaPf"
+        :selection="selection"
+      />
+    </PlSlideModal>
   </PlBlockPage>
 </template>
