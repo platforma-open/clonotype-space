@@ -7,7 +7,7 @@ import {
 } from '@platforma-sdk/model';
 
 import '@milaboratories/graph-maker/styles';
-import { PlBlockPage, PlDropdownRef, PlMultiSequenceAlignment } from '@platforma-sdk/ui-vue';
+import { PlAgDataTableToolsPanel, PlBlockPage, PlDropdownRef, PlMultiSequenceAlignment } from '@platforma-sdk/ui-vue';
 import { useApp } from '../app';
 
 import type { GraphMakerProps } from '@milaboratories/graph-maker';
@@ -76,14 +76,16 @@ const selection = ref<PlSelectionModel>({
       :default-options="defaultOptions"
     >
       <template #titleLineSlot>
-        <PlMultiSequenceAlignment
-          v-model="app.model.ui.alignmentModel"
-          :label-column-option-predicate="isLabelColumnOption"
-          :sequence-column-predicate="isSequenceColumn"
-          :linker-column-predicate="isLinkerColumn"
-          :p-frame="app.model.outputs.msaPf"
-          :selection="selection"
-        />
+        <PlAgDataTableToolsPanel>
+          <PlMultiSequenceAlignment
+            v-model="app.model.ui.alignmentModel"
+            :label-column-option-predicate="isLabelColumnOption"
+            :sequence-column-predicate="isSequenceColumn"
+            :linker-column-predicate="isLinkerColumn"
+            :p-frame="app.model.outputs.msaPf"
+            :selection="selection"
+          />
+        </PlAgDataTableToolsPanel>
       </template>
       <template #settingsSlot>
         <PlDropdownRef
