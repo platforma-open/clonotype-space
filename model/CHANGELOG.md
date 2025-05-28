@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.model
 
+## 2.0.1
+
+### Patch Changes
+
+- eaf8a85: Update scripts
+
 ## 2.0.0
 
 ### Major Changes
