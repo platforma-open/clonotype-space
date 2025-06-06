@@ -46,7 +46,6 @@ import os
 from scipy import sparse
 from sklearn.decomposition import TruncatedSVD
 import time
-import gc
 # import pickle
 
 # Constants for sampling thresholds
@@ -147,12 +146,12 @@ def main():
     parser.add_argument('--output-dir', default='.',
                         help='Directory to save output files (default: current directory)')
     parser.add_argument('--umap-backend', type=str, default='auto',
-                        choices=['auto', 'cuml', 'sklearn'],
+                        choices=['auto', 'cuml', 'sklearn', 'parametric-umap'],
                         help='Choose UMAP implementation:\n'
                              '  "auto" (default): Tries cuml.UMAP first, falls back to umap-learn.\n'
                              '  "cuml": Forces RAPIDS cuml.UMAP (requires CUDA-enabled GPU and cuml installed).\n'
                              '  "sklearn": Forces umap-learn (CPU-based, no GPU required).')
-    parser.add_argument('--store-models', type=bool, default=False,
+    parser.add_argument('--store-models', action='store_true',
                         help='Set to True to store SVD and UMAP models (default: False)')
 
     args = parser.parse_args()
@@ -305,11 +304,6 @@ def main():
         umap_embed = umap_model.fit_transform(svd_embed)
         end_time_umap_fit_transform = time.time()
         print(f"UMAP model fitting completed in {end_time_umap_fit_transform - start_time_umap_fit:.2f} seconds.\n")
-        
-        # Clean GPU memory
-        v = 1
-        while v != 0:
-            v = gc.collect()
 
     # --- Start Timing: Save Output ---
     start_time_save = time.time()
