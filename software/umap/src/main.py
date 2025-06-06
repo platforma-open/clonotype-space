@@ -46,6 +46,7 @@ import os
 from scipy import sparse
 from sklearn.decomposition import TruncatedSVD
 import time
+import gc
 # import pickle
 
 # Constants for sampling thresholds
@@ -257,6 +258,7 @@ def main():
     # -- Subsample dataset if working with CPU --
     if num_total_sequences < SAMPLING_THRESHOLD_1:
         print(f"Total sequences ({num_total_sequences}) < {SAMPLING_THRESHOLD_1}. No sampling for UMAP fitting.")
+        sampled_data_for_fit = svd_embed # Default to full data
     else:
         if num_total_sequences < SAMPLING_THRESHOLD_2:
             actual_sample_size = int(num_total_sequences * 0.50)
@@ -275,7 +277,7 @@ def main():
     umap_model = None
     
     # Determine which UMAP backend to use
-    if args.umap_backend in ['cuml', 'auto', 'sklearn']:
+    if args.umap_backend in ['cuml', 'auto', 'sklearn', 'parametric-umap']:
         umap_model, run_type = create_umap_model(args.umap_backend, args.umap_components, 
                                     args.umap_neighbors, args.umap_min_dist)
     else:
@@ -334,7 +336,7 @@ def main():
     if args.store_models:
         # with open(f"{args.output_dir}/svd_model.pickle", "wb") as f:
         #     pickle.dump(svd, f)
-        if backend == 'parametric-umap':
+        if args.umap_backend == 'parametric-umap':
             # model.pkl
             umap_model.save(args.output_dir)
         # with open("umap_model.pickle", "wb") as f:
