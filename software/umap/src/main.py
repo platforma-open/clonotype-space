@@ -284,7 +284,6 @@ def main():
 
     # --- Start Timing: UMAP Fitting ---
     start_time_umap_fit = time.time()
-    sampled_data_for_fit = svd_embed # Default to full data
 
     if run_type == 'cpu':
         print("Running UMAP dimensionality reduction (fitting model)...")
