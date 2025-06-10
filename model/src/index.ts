@@ -3,6 +3,7 @@ import type {
   DataInfo,
   InferOutputsType,
   PColumn,
+  PColumnIdAndSpec,
   PColumnValues,
   PFrameHandle,
   PlMultiSequenceAlignmentModel,
@@ -107,6 +108,22 @@ export const model = BlockModel.create()
     }
 
     return createPFrameForGraphs(ctx, pCols);
+  })
+
+  // Return a list of Pcols for plot defaults
+  .output('umapPcols', (ctx) => {
+    const pCols = ctx.outputs?.resolve('umapPf')?.getPColumns();
+    if (pCols === undefined) {
+      return undefined;
+    }
+
+    return pCols.map(
+      (c) =>
+        ({
+          columnId: c.id,
+          spec: c.spec,
+        } satisfies PColumnIdAndSpec),
+    );
   })
 
   .output('isRunning', (ctx) => ctx.outputs?.getIsReadyOrError() === false)

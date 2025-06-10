@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type {
+  PColumnIdAndSpec,
   PlRef,
 } from '@platforma-sdk/model';
 import {
@@ -13,7 +14,7 @@ import { useApp } from '../app';
 import type { GraphMakerProps } from '@milaboratories/graph-maker';
 import { GraphMaker } from '@milaboratories/graph-maker';
 import type { PlSelectionModel } from '@platforma-sdk/model';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { isLabelColumnOption, isLinkerColumn, isSequenceColumn } from '../util';
 
 const app = useApp();
@@ -27,36 +28,30 @@ function setAnchorColumn(ref: PlRef | undefined) {
     : '');
 }
 
-const defaultOptions: GraphMakerProps['defaultOptions'] = [
-  {
-    inputName: 'x',
-    selectedSource: {
-      kind: 'PColumn',
-      name: 'pl7.app/vdj/umap1',
-      valueType: 'Double',
-      axesSpec: [
-        {
-          name: 'pl7.app/clonotypeKey',
-          type: 'String',
-        },
-      ],
+const defaultOptions = computed((): GraphMakerProps['defaultOptions'] => {
+  if (!app.model.outputs.umapPcols)
+    return undefined;
+
+  const umapPcols = app.model.outputs.umapPcols;
+  function getIndex(name: string, pcols: PColumnIdAndSpec[]): number {
+    return pcols.findIndex((p) => (p.spec.name === name
+    ));
+  }
+
+  const defaults: GraphMakerProps['defaultOptions'] = [
+    {
+      inputName: 'x',
+      selectedSource: umapPcols[getIndex('pl7.app/vdj/umap1',
+        umapPcols)].spec,
     },
-  },
-  {
-    inputName: 'y',
-    selectedSource: {
-      kind: 'PColumn',
-      name: 'pl7.app/vdj/umap2',
-      valueType: 'Double',
-      axesSpec: [
-        {
-          name: 'pl7.app/clonotypeKey',
-          type: 'String',
-        },
-      ],
+    {
+      inputName: 'y',
+      selectedSource: umapPcols[getIndex('pl7.app/vdj/umap2',
+        umapPcols)].spec,
     },
-  },
-];
+  ];
+  return defaults;
+});
 
 const selection = ref<PlSelectionModel>({
   axesSpec: [],
