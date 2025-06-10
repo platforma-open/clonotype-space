@@ -11,7 +11,7 @@ import '@milaboratories/graph-maker/styles';
 import { PlBlockPage, PlBtnGhost, PlDropdownRef, PlMultiSequenceAlignment, PlSlideModal } from '@platforma-sdk/ui-vue';
 import { useApp } from '../app';
 
-import type { GraphMakerProps } from '@milaboratories/graph-maker';
+import type { GraphMakerProps, PredefinedGraphOption } from '@milaboratories/graph-maker';
 import { GraphMaker } from '@milaboratories/graph-maker';
 import type { PlSelectionModel } from '@platforma-sdk/model';
 import { computed, ref } from 'vue';
@@ -38,7 +38,7 @@ const defaultOptions = computed((): GraphMakerProps['defaultOptions'] => {
     ));
   }
 
-  const defaults: GraphMakerProps['defaultOptions'] = [
+  const defaults: PredefinedGraphOption<'scatterplot-umap'>[] = [
     {
       inputName: 'x',
       selectedSource: umapPcols[getIndex('pl7.app/vdj/umap1',
