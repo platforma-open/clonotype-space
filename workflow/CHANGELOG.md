@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.workflow
 
+## 2.1.0
+
+### Minor Changes
+
+- 5761090: chore: update deps
+
 ## 2.0.1
 
 ### Patch Changes
