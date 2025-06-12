@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.model
 
+## 2.1.0
+
+### Minor Changes
+
+- 2ef021c: Update umap script and plot defaults
+
 ## 2.0.1
 
 ### Patch Changes
