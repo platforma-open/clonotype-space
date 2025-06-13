@@ -20,7 +20,9 @@ getColumns := func(datasetSpec, blockId) {
             "pl7.app/vdj/umap/blockId": blockId
           },
           annotations: {
-            "pl7.app/label": "UMAP Dim1"
+            "pl7.app/label": "UMAP Dim1",
+            "pl7.app/format": ".2f",
+            "pl7.app/table/visibility": "hidden"
           }
         }
       },
@@ -35,7 +37,9 @@ getColumns := func(datasetSpec, blockId) {
             "pl7.app/vdj/umap/blockId": blockId
           },
           annotations: {
-            "pl7.app/label": "UMAP Dim2"
+            "pl7.app/label": "UMAP Dim2",
+            "pl7.app/format": ".2f",
+            "pl7.app/table/visibility": "hidden"
           }
         }
       }],
