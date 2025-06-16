@@ -1,6 +1,8 @@
 wf := import("@platforma-sdk/workflow-tengo:workflow")
 exec := import("@platforma-sdk/workflow-tengo:exec")
 assets:= import("@platforma-sdk/workflow-tengo:assets")
+smart := import("@platforma-sdk/workflow-tengo:smart")
+ll := import("@platforma-sdk/workflow-tengo:ll")
 
 xsv := import("@platforma-sdk/workflow-tengo:pframes.xsv")
 pframes := import("@platforma-sdk/workflow-tengo:pframes")
@@ -40,7 +42,9 @@ wf.body(func(args) {
 	// Input arguments
 	columns := args.columns
 	datasetSpec := columns.getSpec(args.inputAnchor)
-	
+	umap_neighbors := args.umap_neighbors
+	umap_min_dist := args.umap_min_dist
+
 	// Needed conditional variables
 	isSingleCell := datasetSpec.axesSpec[1].name == "pl7.app/vdj/scClonotypeKey"
 	
@@ -68,6 +72,8 @@ wf.body(func(args) {
 		addFile("sequences.tsv", umapTable).
 		arg("-i").arg("sequences.tsv").
 		arg("-u").arg("umap.tsv").
+		arg("--umap-neighbors").arg(string(umap_neighbors)).
+		arg("--umap-min-dist").arg(string(umap_min_dist)).
 		saveFile("umap.tsv").
 		printErrStreamToStdout().
 		saveStdoutContent().
