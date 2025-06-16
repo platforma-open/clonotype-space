@@ -13,7 +13,7 @@ catalog:
   "@platforma-sdk/block-tools": ^2.5.55
   "@platforma-sdk/test": ^1.34.3
   "@platforma-sdk/tengo-builder": ^2.1.10
-  "@platforma-sdk/package-builder": ^2.16.0
+  "@platforma-sdk/package-builder": ^2.16.1
   "@platforma-sdk/eslint-config": ^1.0.3
   "@milaboratories/graph-maker": ^1.1.110
 
