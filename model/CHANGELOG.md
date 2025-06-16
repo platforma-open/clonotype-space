@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.model
 
+## 2.2.0
+
+### Minor Changes
+
+- 934ea49: Improved parameter handling and dimension calculation.
+
 ## 2.1.0
 
 ### Minor Changes

@@ -1,5 +1,16 @@
 # @platforma-open/milaboratories.clonotype-space.workflow
 
+## 2.2.0
+
+### Minor Changes
+
+- 934ea49: Improved parameter handling and dimension calculation.
+
+### Patch Changes
+
+- Updated dependencies [934ea49]
+  - @platforma-open/milaboratories.clonotype-space.umap@2.2.0
+
 ## 2.1.1
 
 ### Patch Changes
