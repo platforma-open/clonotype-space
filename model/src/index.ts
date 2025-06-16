@@ -102,7 +102,7 @@ export const model = BlockModel.create()
   })
 
   .output('umapPf', (ctx): PFrameHandle | undefined => {
-    const pCols = ctx.outputs?.resolve('umapPf')?.getPColumns();
+    const pCols = ctx.outputs?.resolve({ field: 'umapPf', allowPermanentAbsence: true })?.getPColumns();
     if (pCols === undefined) {
       return undefined;
     }
@@ -110,10 +110,24 @@ export const model = BlockModel.create()
     return createPFrameForGraphs(ctx, pCols);
   })
 
+  .output('inputState', (ctx) => {
+    const inputState = ctx.outputs?.resolve('inputState')?.getDataAsJson() as object;
+    if (inputState === undefined) {
+      return undefined;
+    }
+
+    if ('content' in inputState) {
+      return inputState.content;
+    } else {
+      return undefined;
+    }
+  })
+
   // Return a list of Pcols for plot defaults
   .output('umapPcols', (ctx) => {
-    const pCols = ctx.outputs?.resolve('umapPf')?.getPColumns();
-    if (pCols === undefined) {
+    const pCols = ctx.outputs?.resolve({ field: 'umapPf', allowPermanentAbsence: true })?.getPColumns();
+
+    if (pCols === undefined || pCols.length === 0) {
       return undefined;
     }
 

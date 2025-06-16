@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@platforma-open/milaboratories.clonotype-space.umap": "workspace:*",
+    "@platforma-open/milaboratories.clonotype-space.empty-check": "workspace:*",
     "@platforma-sdk/workflow-tengo": "catalog:"
   },
   "devDependencies": {
