@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.workflow
 
+## 2.3.0
+
+### Minor Changes
+
+- f01f4e2: Add annotations for number formatting, hide visibility of UMAP coordinates in tables
+
 ## 2.2.0
 
 ### Minor Changes
