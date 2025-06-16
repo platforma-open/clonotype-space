@@ -18,6 +18,8 @@ import {
 
 export type BlockArgs = {
   inputAnchor?: PlRef;
+  umap_neighbors: number;
+  umap_min_dist: number;
 };
 
 export type UiState = {
@@ -59,6 +61,8 @@ function getColumns(ctx: RenderCtx<BlockArgs, UiState>): Columns | undefined {
 export const model = BlockModel.create()
 
   .withArgs<BlockArgs>({
+    umap_neighbors: 15,
+    umap_min_dist: 0.5,
   })
 
   .withUiState<UiState>({
