@@ -32,6 +32,8 @@ self.body(func(inputs) {
 		// Proceed only if metadata matrix is full rank
 		umapClones := exec.builder().
 			software(assets.importSoftware("@platforma-open/milaboratories.clonotype-space.umap:main")).
+			mem("64GiB").
+			cpu(1).
 			addFile("sequences.tsv", inputs.umapTable).
 			arg("-i").arg("sequences.tsv").
 			arg("-u").arg("umap.tsv").
@@ -45,7 +47,7 @@ self.body(func(inputs) {
 			umapClones.getFile("umap.tsv"),
 			"tsv",
 			umapConv.getColumns(inputs.datasetSpec, inputs.blockId), 
-			{ splitDataAndSpec: true })
+			{ splitDataAndSpec: true, cpu: 1, mem: "64GiB" })
 
 		// Make trace
 		trace := pSpec.makeTrace(inputs.datasetSpec,
