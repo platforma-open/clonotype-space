@@ -110,6 +110,18 @@ export const model = BlockModel.create()
     return createPFrameForGraphs(ctx, pCols);
   })
 
+  .output('umapDim1Table', (ctx) => {
+    const pCols = ctx.outputs?.resolve({ field: 'umapPf', allowPermanentAbsence: true })?.getPColumns();
+    if (pCols === undefined) {
+      return undefined;
+    }
+    const dim1Column = pCols.find((p) => p.spec.name === 'pl7.app/vdj/umap1');
+    if (dim1Column === undefined) {
+      return undefined;
+    }
+    return ctx.createPTable({ columns: [dim1Column] });
+  })
+
   .output('inputState', (ctx) => {
     const inputState = ctx.outputs?.resolve('inputState')?.getDataAsJson() as object;
     if (inputState === undefined) {

@@ -4,6 +4,7 @@ import type {
   PlRef,
 } from '@platforma-sdk/model';
 import {
+  getRawPlatformaInstance,
   plRefsEqual,
 } from '@platforma-sdk/model';
 
@@ -14,8 +15,9 @@ import { useApp } from '../app';
 import type { GraphMakerProps, PredefinedGraphOption } from '@milaboratories/graph-maker';
 import { GraphMaker } from '@milaboratories/graph-maker';
 import type { PlSelectionModel } from '@platforma-sdk/model';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { isLabelColumnOption, isLinkerColumn, isSequenceColumn } from '../util';
+import { asyncComputed } from '@vueuse/core';
 
 const app = useApp();
 
@@ -51,6 +53,11 @@ const defaultOptions = computed((): GraphMakerProps['defaultOptions'] => {
     },
   ];
   return defaults;
+});
+
+const isEmpty = asyncComputed(async () => {
+  if (app.model.outputs.umapDim1Table === undefined) return undefined;
+  return (await getRawPlatformaInstance().pFrameDriver.getShape(app.model.outputs.umapDim1Table)).rows === 0;
 });
 
 const selection = ref<PlSelectionModel>({
@@ -89,7 +96,7 @@ const multipleSequenceAlignmentOpen = ref(false);
         />
       </template>
     </GraphMaker>
-    <PlAlert v-if="app.model.outputs.inputState === 'empty'" type="error" style="margin-top: 1rem;">
+    <PlAlert v-if="isEmpty === true" type="error" style="margin-top: 1rem;">
       {{ "Error: The input dataset you have selected is empty. \
       Please choose a different dataset." }}
     </PlAlert>
