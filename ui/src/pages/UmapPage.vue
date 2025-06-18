@@ -4,6 +4,7 @@ import type {
   PlRef,
 } from '@platforma-sdk/model';
 import {
+  getRawPlatformaInstance,
   plRefsEqual,
 } from '@platforma-sdk/model';
 
@@ -14,6 +15,7 @@ import { useApp } from '../app';
 import type { GraphMakerProps, PredefinedGraphOption } from '@milaboratories/graph-maker';
 import { GraphMaker } from '@milaboratories/graph-maker';
 import type { PlSelectionModel } from '@platforma-sdk/model';
+import { asyncComputed } from '@vueuse/core';
 import { computed, ref } from 'vue';
 import { isLabelColumnOption, isLinkerColumn, isSequenceColumn } from '../util';
 
@@ -51,6 +53,12 @@ const defaultOptions = computed((): GraphMakerProps['defaultOptions'] => {
     },
   ];
   return defaults;
+});
+
+// Check if the UMAP file is empty
+const isEmpty = asyncComputed(async () => {
+  if (app.model.outputs.umapDim1Table === undefined) return undefined;
+  return (await getRawPlatformaInstance().pFrameDriver.getShape(app.model.outputs.umapDim1Table)).rows === 0;
 });
 
 const selection = ref<PlSelectionModel>({
@@ -106,6 +114,10 @@ const multipleSequenceAlignmentOpen = ref(false);
         />
       </template>
     </GraphMaker>
+    <PlAlert v-if="isEmpty === true" type="error" style="margin-top: 1rem;">
+      {{ "Error: The input dataset you have selected is empty. \
+      Please choose a different dataset." }}
+    </PlAlert>
     <PlSlideModal v-model="multipleSequenceAlignmentOpen" width="100%">
       <template #title>Multiple Sequence Alignment</template>
       <PlMultiSequenceAlignment

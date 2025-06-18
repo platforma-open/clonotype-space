@@ -106,7 +106,7 @@ export const model = BlockModel.create()
   })
 
   .output('umapPf', (ctx): PFrameHandle | undefined => {
-    const pCols = ctx.outputs?.resolve('umapPf')?.getPColumns();
+    const pCols = ctx.outputs?.resolve({ field: 'umapPf', allowPermanentAbsence: true })?.getPColumns();
     if (pCols === undefined) {
       return undefined;
     }
@@ -114,10 +114,25 @@ export const model = BlockModel.create()
     return createPFrameForGraphs(ctx, pCols);
   })
 
+  // Create a PTable with the first dimension of the UMAP to test if file is empty
+  // output file will only be empty in cases where input data was empty
+  .output('umapDim1Table', (ctx) => {
+    const pCols = ctx.outputs?.resolve('umapPf')?.getPColumns();
+    if (pCols === undefined) {
+      return undefined;
+    }
+    const dim1Column = pCols.find((p) => p.spec.name === 'pl7.app/vdj/umap1');
+    if (dim1Column === undefined) {
+      return undefined;
+    }
+    return ctx.createPTable({ columns: [dim1Column] });
+  })
+
   // Return a list of Pcols for plot defaults
   .output('umapPcols', (ctx) => {
     const pCols = ctx.outputs?.resolve('umapPf')?.getPColumns();
-    if (pCols === undefined) {
+
+    if (pCols === undefined || pCols.length === 0) {
       return undefined;
     }
 

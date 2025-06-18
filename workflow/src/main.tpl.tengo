@@ -68,11 +68,15 @@ wf.body(func(args) {
 			umapTable.add(col, {header: "aaSequence." + chainLabel})
 		}
 	}
+	umapTable.mem("16GiB")
+	umapTable.cpu(1)
 	umapTable = umapTable.build()
 
 	// UMAP script should go here
 	umapClones := exec.builder().
 		software(assets.importSoftware("@platforma-open/milaboratories.clonotype-space.umap:main")).
+		mem("32GiB").
+		cpu(1).
 		addFile("sequences.tsv", umapTable).
 		arg("-i").arg("sequences.tsv").
 		arg("-u").arg("umap.tsv").
@@ -84,25 +88,26 @@ wf.body(func(args) {
 		cache(24 * 60 * 60 * 1000).
 		run()
 
-
 	umapPf := xsv.importFile(
 		umapClones.getFile("umap.tsv"),
 		"tsv",
-		umapConv.getColumns(datasetSpec, blockId),
-		{ splitDataAndSpec: true })
+		umapConv.getColumns(datasetSpec, blockId), 
+		{ splitDataAndSpec: true, cpu: 1, mem: "16GiB" })
 
 	// Make trace
-    trace := pSpec.makeTrace(datasetSpec,
-        {
-            type: "milaboratories.clonotype-space",
-            importance: 30,
-            label: "Clonotype Space"
-        })
+	trace := pSpec.makeTrace(datasetSpec,
+		{
+			type: "milaboratories.clonotype-space",
+			importance: 30,
+			label: "Clonotype Space"
+		})
 
 	pf := pframes.pFrameBuilder()
 	for k, v in umapPf {
 		pf.add(k, trace.inject(v.spec), v.data)
 	}
+		
+	// Build the final PFrame
 	pf = pf.build()
 
 	return {
