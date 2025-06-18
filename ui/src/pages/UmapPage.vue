@@ -23,7 +23,7 @@ const app = useApp();
 
 function setAnchorColumn(ref: PlRef | undefined) {
   app.model.args.inputAnchor = ref;
-  app.model.ui.title = 'Clonotyssspe Space - ' + (ref
+  app.model.ui.title = 'Clonotype Space - ' + (ref
     ? app.model.outputs.inputOptions?.find((o) =>
       plRefsEqual(o.ref, ref),
     )?.label
