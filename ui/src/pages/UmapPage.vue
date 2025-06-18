@@ -9,7 +9,7 @@ import {
 } from '@platforma-sdk/model';
 
 import '@milaboratories/graph-maker/styles';
-import { PlAlert, PlBlockPage, PlBtnGhost, PlDropdownRef, PlMultiSequenceAlignment, PlSlideModal } from '@platforma-sdk/ui-vue';
+import { PlBlockPage, PlBtnGhost, PlDropdownRef, PlMultiSequenceAlignment, PlNumberField, PlSectionSeparator, PlSlideModal } from '@platforma-sdk/ui-vue';
 import { useApp } from '../app';
 
 import type { GraphMakerProps, PredefinedGraphOption } from '@milaboratories/graph-maker';
@@ -94,6 +94,23 @@ const multipleSequenceAlignmentOpen = ref(false);
           label="Select dataset"
           required
           @update:model-value="setAnchorColumn"
+        />
+        <PlSectionSeparator>UMAP parameters</PlSectionSeparator>
+        <PlNumberField
+          v-model="app.model.args.umap_neighbors"
+          label="N Neighbors"
+          :min="5"
+          :max="500"
+          :step="5"
+          required
+        />
+        <PlNumberField
+          v-model="app.model.args.umap_min_dist"
+          label="Min Distance"
+          :min="0"
+          :max="1"
+          :step="0.1"
+          required
         />
       </template>
     </GraphMaker>

@@ -2,8 +2,12 @@ import { model } from '@platforma-open/milaboratories.clonotype-space.model';
 import { defineApp } from '@platforma-sdk/ui-vue';
 import UmapPage from './pages/UmapPage.vue';
 
-export const sdkPlugin = defineApp(model, () => {
+export const sdkPlugin = defineApp(model, (app) => {
   return {
+    progress: () => {
+      return app.model.outputs.isRunning;
+    },
+    showErrorsNotification: true,
     routes: {
       '/': () => UmapPage,
     },

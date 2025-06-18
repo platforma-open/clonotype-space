@@ -1,5 +1,60 @@
 # @platforma-open/milaboratories.clonotype-space
 
+## 2.0.9
+
+### Patch Changes
+
+- 888dd27: SDK Upgrade
+- Updated dependencies [888dd27]
+  - @platforma-open/milaboratories.clonotype-space.workflow@2.3.3
+  - @platforma-open/milaboratories.clonotype-space.ui@2.2.3
+  - @platforma-open/milaboratories.clonotype-space.model@2.2.3
+
+## 2.0.8
+
+### Patch Changes
+
+- c25ef01: Update SDK
+- Updated dependencies [c25ef01]
+  - @platforma-open/milaboratories.clonotype-space.model@2.2.2
+  - @platforma-open/milaboratories.clonotype-space.ui@2.2.2
+  - @platforma-open/milaboratories.clonotype-space.workflow@2.3.2
+
+## 2.0.7
+
+### Patch Changes
+
+- 095aa9a: SDK update
+- Updated dependencies [095aa9a]
+  - @platforma-open/milaboratories.clonotype-space.model@2.2.1
+  - @platforma-open/milaboratories.clonotype-space.ui@2.2.1
+  - @platforma-open/milaboratories.clonotype-space.workflow@2.3.1
+
+## 2.0.6
+
+### Patch Changes
+
+- Updated dependencies [f01f4e2]
+  - @platforma-open/milaboratories.clonotype-space.workflow@2.3.0
+
+## 2.0.5
+
+### Patch Changes
+
+- Updated dependencies [934ea49]
+  - @platforma-open/milaboratories.clonotype-space.workflow@2.2.0
+  - @platforma-open/milaboratories.clonotype-space.model@2.2.0
+  - @platforma-open/milaboratories.clonotype-space.ui@2.2.0
+
+## 2.0.4
+
+### Patch Changes
+
+- Updated dependencies [2ef021c]
+  - @platforma-open/milaboratories.clonotype-space.model@2.1.0
+  - @platforma-open/milaboratories.clonotype-space.ui@2.1.0
+  - @platforma-open/milaboratories.clonotype-space.workflow@2.1.1
+
 ## 2.0.3
 
 ### Patch Changes

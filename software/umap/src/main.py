@@ -133,14 +133,12 @@ def main():
                         help='Starting string of the column containing amino acid sequences (default: "aaSequence")')
     parser.add_argument('-u', '--umap-output', required=True,
                         help='Output TSV file for UMAP embeddings')
-    parser.add_argument('--dr-components', type=int, default=5,
-                        help='Number of dimensionality reduction components (TruncatedSVD) before UMAP (default: 5)')
     parser.add_argument('--umap-components', type=int, default=2,
                         help='Number of UMAP dimensions (default: 2)')
-    parser.add_argument('--umap-neighbors', type=int, default=8,
-                        help='UMAP n_neighbors (default: 8)')
-    parser.add_argument('--umap-min-dist', type=float, default=0.05,
-                        help='UMAP min_dist (default: 0.05)')
+    parser.add_argument('--umap-neighbors', type=int, default=15,
+                        help='UMAP n_neighbors (default: 15)')
+    parser.add_argument('--umap-min-dist', type=float, default=0.5,
+                        help='UMAP min_dist (default: 0.5)')
     parser.add_argument('--k-mer-size', type=int, default=3,
                         help='Size of k-mers to use for sequence analysis (default: 3 for amino acids)')
     parser.add_argument('--output-dir', default='.',
@@ -163,16 +161,12 @@ def main():
     print(f"Input file: {args.input}")
     print(f"Output file: {args.umap_output}")
     print(f"Parameters: k-mer size={args.k_mer_size}, "
-          f"DR components={args.dr_components}, "
           f"UMAP components={args.umap_components}, "
           f"UMAP neighbors={args.umap_neighbors}, "
           f"UMAP min_dist={args.umap_min_dist}, "
           f"UMAP Backend={args.umap_backend.upper()}")
 
     # Validate input parameters
-    if args.dr_components < 1:
-        print("Error: Number of dimensionality reduction components must be at least 1")
-        sys.exit(1)
     if args.umap_components < 1:
         print("Error: Number of UMAP components must be at least 1")
         sys.exit(1)
@@ -259,9 +253,25 @@ def main():
     # --- Start Timing: Truncated SVD ---
     start_time_svd = time.time()
     print("Running Truncated SVD...")
-    svd = TruncatedSVD(n_components=args.dr_components, random_state=42)
+    
+    # Calculate optimal number of components based on explained variance
+    n_components_max = min(matrix.shape[0] - 1, matrix.shape[1], 500)  # Limit to 500 components
+    print(f"Running TruncatedSVD with up to {n_components_max} components to find optimal number...")
+    
+    svd_full = TruncatedSVD(n_components=n_components_max, random_state=42)
+    svd_full.fit(matrix)
+    
+    explained_variance_ratio = svd_full.explained_variance_ratio_
+    cumulative_explained_variance = np.cumsum(explained_variance_ratio)
+    
+    # Find number of components for 95% variance
+    n_components_95 = np.argmax(cumulative_explained_variance >= 0.95) + 1 if np.any(cumulative_explained_variance >= 0.95) else n_components_max
+    print(f"Number of components explaining 95% variance: {n_components_95}")
+    
+    # Use the calculated number of components
+    svd = TruncatedSVD(n_components=n_components_95, random_state=42)
     svd_embed = svd.fit_transform(matrix)
-    print(f"Explained variance ratio by {args.dr_components} components: {sum(svd.explained_variance_ratio_):.3f}")
+    print(f"Explained variance ratio by {n_components_95} components: {sum(svd.explained_variance_ratio_):.3f}")
     end_time_svd = time.time()
     print(f"Truncated SVD completed in {end_time_svd - start_time_svd:.2f} seconds.\n")
     
