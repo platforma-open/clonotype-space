@@ -17,7 +17,7 @@ wf.prepare(func(args){
 
 	bundleBuilder := wf.createPBundleBuilder()
 	bundleBuilder.ignoreMissingDomains() // to make query work for both bulk and single cell data
-	bundleBuilder.addAnchor("main", args.inputAnchor) 
+	bundleBuilder.addAnchor("main", args.inputAnchor)
 
 	// Add full aa sequence column
 	bundleBuilder.addMulti({
@@ -45,10 +45,14 @@ wf.body(func(args) {
 	umap_neighbors := args.umap_neighbors
 	umap_min_dist := args.umap_min_dist
 
+	if is_undefined(umap_neighbors) || is_undefined(umap_min_dist) {
+		ll.panic("umap_neighbors or umap_min_dist is undefined")
+	}
+
 	// Needed conditional variables
 	isSingleCell := datasetSpec.axesSpec[1].name == "pl7.app/vdj/scClonotypeKey"
-	
-	// output containers 
+
+	// output containers
 	outputs := {}
 
 	////////// UMAP //////////
@@ -84,7 +88,7 @@ wf.body(func(args) {
 	umapPf := xsv.importFile(
 		umapClones.getFile("umap.tsv"),
 		"tsv",
-		umapConv.getColumns(datasetSpec, blockId), 
+		umapConv.getColumns(datasetSpec, blockId),
 		{ splitDataAndSpec: true })
 
 	// Make trace
