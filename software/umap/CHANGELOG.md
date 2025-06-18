@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.umap
 
+## 2.2.3
+
+### Patch Changes
+
+- 888dd27: SDK Upgrade
+
 ## 2.2.2
 
 ### Patch Changes

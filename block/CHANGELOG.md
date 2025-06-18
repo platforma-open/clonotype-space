@@ -1,5 +1,15 @@
 # @platforma-open/milaboratories.clonotype-space
 
+## 2.0.9
+
+### Patch Changes
+
+- 888dd27: SDK Upgrade
+- Updated dependencies [888dd27]
+  - @platforma-open/milaboratories.clonotype-space.workflow@2.3.3
+  - @platforma-open/milaboratories.clonotype-space.ui@2.2.3
+  - @platforma-open/milaboratories.clonotype-space.model@2.2.3
+
 ## 2.0.8
 
 ### Patch Changes
