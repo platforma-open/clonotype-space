@@ -8,7 +8,7 @@ render := import("@platforma-sdk/workflow-tengo:render")
 slices := import("@platforma-sdk/workflow-tengo:slices")
 pSpec := import("@platforma-sdk/workflow-tengo:pframes.spec")
 
-umapTpl := assets.importTemplate(":umap")
+umapConv := import(":pf-umap-conv")
 
 wf.prepare(func(args){
 	// We need a table with cluster ID (optional) | clonotype id | selected ranking columns
@@ -63,45 +63,49 @@ wf.body(func(args) {
 	umapTable.cpu(1)
 	umapTable = umapTable.build()
 
-	// Run script to check if input table is empty
-	emptyCheck := exec.builder().
-			software(assets.importSoftware("@platforma-open/milaboratories.clonotype-space.empty-check:main")).
-			mem("16GiB").
-			cpu(1).
-			addFile("sequences.tsv", umapTable).
-			arg("--output").arg(".").
-			arg("--input").arg("sequences.tsv").
-			arg("--input-separator").arg("\t").
-			saveFileContent("isFileEmpty.txt").
-			printErrStreamToStdout().
-			saveStdoutContent().
-			cache(24 * 60 * 60 * 1000).
-			run()
-	
-	////////// UMAP //////////
-	// get check content to be resolved in sub-template
-	emptyOrNot := emptyCheck.getFileContent("isFileEmpty.txt")
 
-	// Run UMAP template
-	// Analysis will only run if result from emptyOrNot is "notEmpty"
-	umapAnalysis := render.create(umapTpl, {
-		emptyOrNot: emptyOrNot,
-		umapTable: umapTable,
-		datasetSpec: datasetSpec,
-		blockId: blockId
-	})
+	// Run UMAP analysis
+	umapClones := exec.builder().
+		software(assets.importSoftware("@platforma-open/milaboratories.clonotype-space.umap:main")).
+		mem("32GiB").
+		cpu(1).
+		addFile("sequences.tsv", umapTable).
+		arg("-i").arg("sequences.tsv").
+		arg("-u").arg("umap.tsv").
+		saveFile("umap.tsv").
+		printErrStreamToStdout().
+		saveStdoutContent().
+		cache(24 * 60 * 60 * 1000).
+		run()
 
-	// Gather results from continueCheck template
-	umapPf := umapAnalysis.output("pf", 24 * 60 * 60 * 1000)
-	inputState := umapAnalysis.output("inputState", 24 * 60 * 60 * 1000)
+	umapPf := xsv.importFile(
+		umapClones.getFile("umap.tsv"),
+		"tsv",
+		umapConv.getColumns(datasetSpec, blockId), 
+		{ splitDataAndSpec: true, cpu: 1, mem: "16GiB" })
+
+	// Make trace
+	trace := pSpec.makeTrace(datasetSpec,
+		{
+			type: "milaboratories.clonotype-space",
+			importance: 30,
+			label: "Clonotype Space"
+		})
+
+	pf := pframes.pFrameBuilder()
+	for k, v in umapPf {
+		pf.add(k, trace.inject(v.spec), v.data)
+	}
+		
+	// Build the final PFrame
+	pf = pf.build()
 
 	return {
 		outputs: {
-			umapPf: pframes.exportFrame(umapPf),
-			inputState: inputState
+			umapPf: pframes.exportFrame(pf)
 		},
 		exports: {
-			umapPf: umapPf
+			umapPf: pf
 		}
 	}
 })

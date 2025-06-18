@@ -202,6 +202,17 @@ def main():
         print(f"Error reading input file: {e}")
         sys.exit(1)
 
+    # Before continuing, we check if input files is empty
+    output_path = os.path.join(args.output_dir, args.umap_output)
+    if df_input.empty:
+        print("Error: Input file is empty")
+        # Create empty UMAP file with header
+        umap_df = pd.DataFrame(
+                columns=[df_input.columns[0]] + [f'UMAP{i+1}' for i in range(args.umap_components)]
+                )
+        umap_df.to_csv(output_path, index=False, sep='\t')
+        sys.exit(0)
+
     seq_col_list = sorted([c for c in df_input.columns 
                         if c.startswith(args.seq_col_start)])
     if len(seq_col_list) == 0:
@@ -307,7 +318,6 @@ def main():
 
     # --- Start Timing: Save Output ---
     start_time_save = time.time()
-    output_path = os.path.join(args.output_dir, args.umap_output)
     
     if 'clonotypeKey' in df_input.columns:
         output_index = df_input['clonotypeKey']

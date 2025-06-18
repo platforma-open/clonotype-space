@@ -1,6 +1,5 @@
 packages:
   - software/umap
-  - software/empty-check
   - workflow
   - model
   - ui

@@ -15,15 +15,15 @@ import { useApp } from '../app';
 import type { GraphMakerProps, PredefinedGraphOption } from '@milaboratories/graph-maker';
 import { GraphMaker } from '@milaboratories/graph-maker';
 import type { PlSelectionModel } from '@platforma-sdk/model';
-import { computed, ref, watch } from 'vue';
-import { isLabelColumnOption, isLinkerColumn, isSequenceColumn } from '../util';
 import { asyncComputed } from '@vueuse/core';
+import { computed, ref } from 'vue';
+import { isLabelColumnOption, isLinkerColumn, isSequenceColumn } from '../util';
 
 const app = useApp();
 
 function setAnchorColumn(ref: PlRef | undefined) {
   app.model.args.inputAnchor = ref;
-  app.model.ui.title = 'Clonotype Space - ' + (ref
+  app.model.ui.title = 'Clonotyssspe Space - ' + (ref
     ? app.model.outputs.inputOptions?.find((o) =>
       plRefsEqual(o.ref, ref),
     )?.label
@@ -55,6 +55,7 @@ const defaultOptions = computed((): GraphMakerProps['defaultOptions'] => {
   return defaults;
 });
 
+// Check if the UMAP file is empty
 const isEmpty = asyncComputed(async () => {
   if (app.model.outputs.umapDim1Table === undefined) return undefined;
   return (await getRawPlatformaInstance().pFrameDriver.getShape(app.model.outputs.umapDim1Table)).rows === 0;
