@@ -106,7 +106,7 @@ export const model = BlockModel.create()
   })
 
   .output('umapPf', (ctx): PFrameHandle | undefined => {
-    const pCols = ctx.outputs?.resolve({ field: 'umapPf', allowPermanentAbsence: true })?.getPColumns();
+    const pCols = ctx.outputs?.resolve('umapPf')?.getPColumns();
     if (pCols === undefined) {
       return undefined;
     }
