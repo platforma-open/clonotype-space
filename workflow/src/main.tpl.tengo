@@ -59,9 +59,13 @@ wf.body(func(args) {
 	// Generate input TSV with Clonotype ID and aa sequence
 	umapTable := pframes.tsvFileBuilder()
 	umapTable.setAxisHeader(datasetSpec.axesSpec[1].name, "clonotypeKey")
-	for col in columns.getColumns("aaSequence") {
+	for nc, col in columns.getColumns("aaSequence") {
 		if isSingleCell {
 			chainLabel := col.spec.domain["pl7.app/vdj/scClonotypeChain"]
+			// scFv case
+			if chainLabel == undefined {
+				chainLabel = "chain" + string(nc)
+			}
 			umapTable.add(col, {header: "aaSequence." + chainLabel})
 		} else {
 			chainLabel := col.spec.axesSpec[0].domain["pl7.app/vdj/chain"]
@@ -75,7 +79,7 @@ wf.body(func(args) {
 	// UMAP script should go here
 	umapClones := exec.builder().
 		software(assets.importSoftware("@platforma-open/milaboratories.clonotype-space.umap:main")).
-		mem("32GiB").
+		mem("64GiB").
 		cpu(1).
 		addFile("sequences.tsv", umapTable).
 		arg("-i").arg("sequences.tsv").
