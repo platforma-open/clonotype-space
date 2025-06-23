@@ -93,6 +93,7 @@ const multipleSequenceAlignmentOpen = ref(false);
           :options="app.model.outputs.inputOptions"
           label="Select dataset"
           required
+          :style="{ width: '320px' }"
           @update:model-value="setAnchorColumn"
         />
         <PlSectionSeparator>UMAP parameters</PlSectionSeparator>
@@ -103,6 +104,7 @@ const multipleSequenceAlignmentOpen = ref(false);
           :max="500"
           :step="5"
           required
+          :style="{ width: '320px' }"
         />
         <PlNumberField
           v-model="app.model.args.umap_min_dist"
@@ -111,13 +113,15 @@ const multipleSequenceAlignmentOpen = ref(false);
           :max="1"
           :step="0.1"
           required
+          :style="{ width: '320px' }"
         />
+        <PlAlert v-if="isEmpty === true" type="warn" :style="{ width: '320px' }">
+          <template #title>Empty dataset selection</template>
+          The input dataset you have selected is empty.
+          Please choose a different dataset.
+        </PlAlert>
       </template>
     </GraphMaker>
-    <PlAlert v-if="isEmpty === true" type="warn" style="margin-top: 1rem;">
-      {{ "The input dataset you have selected is empty. \
-      Please choose a different dataset." }}
-    </PlAlert>
     <PlSlideModal v-model="multipleSequenceAlignmentOpen" width="100%">
       <template #title>Multiple Sequence Alignment</template>
       <PlMultiSequenceAlignment
