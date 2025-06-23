@@ -9,7 +9,7 @@ import {
 } from '@platforma-sdk/model';
 
 import '@milaboratories/graph-maker/styles';
-import { PlBlockPage, PlBtnGhost, PlDropdownRef, PlMultiSequenceAlignment, PlNumberField, PlSectionSeparator, PlSlideModal } from '@platforma-sdk/ui-vue';
+import { PlAlert, PlBlockPage, PlBtnGhost, PlDropdownRef, PlMultiSequenceAlignment, PlNumberField, PlSectionSeparator, PlSlideModal } from '@platforma-sdk/ui-vue';
 import { useApp } from '../app';
 
 import type { GraphMakerProps, PredefinedGraphOption } from '@milaboratories/graph-maker';
@@ -114,8 +114,8 @@ const multipleSequenceAlignmentOpen = ref(false);
         />
       </template>
     </GraphMaker>
-    <PlAlert v-if="isEmpty === true" type="error" style="margin-top: 1rem;">
-      {{ "Error: The input dataset you have selected is empty. \
+    <PlAlert v-if="isEmpty === true" type="warn" style="margin-top: 1rem;">
+      {{ "The input dataset you have selected is empty. \
       Please choose a different dataset." }}
     </PlAlert>
     <PlSlideModal v-model="multipleSequenceAlignmentOpen" width="100%">
