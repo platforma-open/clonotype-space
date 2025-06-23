@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.umap
 
+## 2.3.0
+
+### Minor Changes
+
+- 009c475: Deal with empty inputs and implement batch system
+
 ## 2.2.4
 
 ### Patch Changes

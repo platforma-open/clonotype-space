@@ -1,5 +1,18 @@
 # @platforma-open/milaboratories.clonotype-space
 
+## 2.1.0
+
+### Minor Changes
+
+- 009c475: Deal with empty inputs and implement batch system
+
+### Patch Changes
+
+- Updated dependencies [009c475]
+  - @platforma-open/milaboratories.clonotype-space.workflow@2.4.0
+  - @platforma-open/milaboratories.clonotype-space.model@2.3.0
+  - @platforma-open/milaboratories.clonotype-space.ui@2.3.0
+
 ## 2.0.11
 
 ### Patch Changes
