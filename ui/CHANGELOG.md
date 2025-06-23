@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.ui
 
+## 2.4.0
+
+### Minor Changes
+
+- 5142159: Updated to handle non valid aa sequences as input
+
 ## 2.3.0
 
 ### Minor Changes
