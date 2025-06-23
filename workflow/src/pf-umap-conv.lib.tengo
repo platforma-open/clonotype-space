@@ -12,7 +12,7 @@ getColumns := func(datasetSpec, blockId) {
       {
         column: "UMAP1",
         id: "umap1",
-        allowNA: false,
+        allowNA: true,
         spec: {
           name: "pl7.app/vdj/umap1",
           valueType: "Double",
@@ -29,7 +29,7 @@ getColumns := func(datasetSpec, blockId) {
       {
         column: "UMAP2",
         id: "umap2",
-        allowNA: false,
+        allowNA: true,
         spec: {
           name: "pl7.app/vdj/umap2",
           valueType: "Double",

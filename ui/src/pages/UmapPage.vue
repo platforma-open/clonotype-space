@@ -9,7 +9,7 @@ import {
 } from '@platforma-sdk/model';
 
 import '@milaboratories/graph-maker/styles';
-import { PlAlert, PlBlockPage, PlBtnGhost, PlDropdownRef, PlMultiSequenceAlignment, PlNumberField, PlSectionSeparator, PlSlideModal } from '@platforma-sdk/ui-vue';
+import { PlAccordionSection, PlAlert, PlBlockPage, PlBtnGhost, PlDropdownRef, PlMultiSequenceAlignment, PlNumberField, PlSlideModal } from '@platforma-sdk/ui-vue';
 import { useApp } from '../app';
 
 import type { GraphMakerProps, PredefinedGraphOption } from '@milaboratories/graph-maker';
@@ -96,25 +96,48 @@ const multipleSequenceAlignmentOpen = ref(false);
           :style="{ width: '320px' }"
           @update:model-value="setAnchorColumn"
         />
-        <PlSectionSeparator>UMAP parameters</PlSectionSeparator>
-        <PlNumberField
-          v-model="app.model.args.umap_neighbors"
-          label="N Neighbors"
-          :min="5"
-          :max="500"
-          :step="5"
-          required
-          :style="{ width: '320px' }"
-        />
-        <PlNumberField
-          v-model="app.model.args.umap_min_dist"
-          label="Min Distance"
-          :min="0"
-          :max="1"
-          :step="0.1"
-          required
-          :style="{ width: '320px' }"
-        />
+        <PlAccordionSection label="UMAP parameters" :style="{ width: '320px' }">
+          <PlNumberField
+            v-model="app.model.args.umap_neighbors"
+            label="N Neighbors"
+            :min="5"
+            :max="500"
+            :step="5"
+            required
+            :style="{ width: '320px' }"
+          >
+            <template #tooltip>
+              <div>
+                <strong>Number of Neighbors for UMAP</strong><br>
+                Controls the balance between local and global structure in UMAP visualization.<br><br>
+                <strong>Recommended ranges:</strong><br>
+                • 10-30: Optimal for most datasets<br>
+                • 5-10: Emphasizes local structure (more clusters)<br>
+                • 30+: Emphasizes global structure (fewer clusters)<br><br>
+              </div>
+            </template>
+          </PlNumberField>
+          <PlNumberField
+            v-model="app.model.args.umap_min_dist"
+            label="Min Distance"
+            :min="0"
+            :max="1"
+            :step="0.1"
+            required
+            :style="{ width: '320px' }"
+          >
+            <template #tooltip>
+              <div>
+                <strong>Minimum Distance for UMAP</strong><br>
+                Controls how tightly UMAP packs points together. Lower values create denser clusters, while higher values preserve broader structure.<br><br>
+                <strong>Recommended ranges:</strong><br>
+                • 0.0 - 0.2: For creating tight clusters.<br>
+                • 0.2 - 0.5: A good balance for most datasets.<br>
+                • 0.5 - 1.0: For a more global view of the data.<br><br>
+              </div>
+            </template>
+          </PlNumberField>
+        </PlAccordionSection>
         <PlAlert v-if="isEmpty === true" type="warn" :style="{ width: '320px' }">
           <template #title>Empty dataset selection</template>
           The input dataset you have selected is empty.

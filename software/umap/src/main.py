@@ -65,9 +65,9 @@ def kmer_count_vectors(sequences, k=3):
         numpy.ndarray: Sparse matrix of k-mer counts (CSR format)
     """
     print(f"Generating {k}-mer count vectors...")
-    # Standard amino acid alphabet (excluding '*' for stop codons if not desired in kmers)
+    # Standard amino acid alphabet, now including 'X', '*', and '_'
     amino_acids = ['A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 
-                   'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'Y']
+                   'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'Y', 'X', '*', '_']
     
     # Generate all possible k-mers
     all_kmers = [''.join(p) for p in itertools.product(amino_acids, repeat=k)]
@@ -86,7 +86,7 @@ def kmer_count_vectors(sequences, k=3):
         print(f"Processing sequences {i+1} to {batch_end} of {num_seqs}...")
         
         for j in range(i, batch_end):
-            seq = str(sequences[j]).upper().strip("_")
+            seq = str(sequences[j]).upper()  # Remove strip("_") to allow underscores in middle
             for pos in range(len(seq) - k + 1):
                 kmer = seq[pos:pos + k]
                 idx = kmer_to_index.get(kmer)
@@ -229,18 +229,36 @@ def main():
         sys.exit(1)
     
     valid_aas = {'A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 
-                 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'Y', '*'} 
+                 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'Y', '*', 'X', '_'} 
     
     invalid_seq_indices = []
     for i, seq in enumerate(sequences):
-        clean_seq = str(seq).upper().strip("_")
+        clean_seq = str(seq).upper()  # Keep underscores in middle, allow them as valid characters
         if not all(aa in valid_aas for aa in clean_seq):
             invalid_seq_indices.append(i)
     
     if invalid_seq_indices:
-        print(f"Warning: Found {len(invalid_seq_indices)} sequences with invalid amino acid characters. These sequences will be processed, but results for them might be noisy.")
+        print(f"Warning: Found {len(invalid_seq_indices)} sequences with invalid amino acid characters. These sequences will be skipped.")
         print(f"Example invalid sequence (first 5): {[sequences[i] for i in invalid_seq_indices[:5]]}")
-    
+        
+        # Create list of valid sequences and their indices
+        valid_sequences = []
+        valid_indices = []
+        for i, seq in enumerate(sequences):
+            if i not in invalid_seq_indices:
+                valid_sequences.append(seq)
+                valid_indices.append(i)
+        
+        # Update sequences and count
+        sequences = valid_sequences
+        num_total_sequences = len(sequences)
+        
+        if num_total_sequences == 0:
+            print('Error: No valid sequences found after filtering. Exiting.')
+            sys.exit(1)
+    else:
+        valid_indices = list(range(len(sequences)))
+
     end_time_load = time.time()
     print(f"Input loading and preprocessing completed in {end_time_load - start_time_load:.2f} seconds.\n")
 
@@ -334,12 +352,35 @@ def main():
     else:
         output_index = df_input.index
     
-    umap_df = pd.DataFrame(
-        umap_embed,
+    # Create complete UMAP dataframe with NA values for skipped sequences
+    complete_umap_df = pd.DataFrame(
         index=output_index,
         columns=[f'UMAP{i+1}' for i in range(args.umap_components)]
     )
-    umap_df.to_csv(output_path, index=True, sep='\t')
+    
+    # Fill with UMAP embeddings for valid sequences
+    for i, valid_idx in enumerate(valid_indices):
+        complete_umap_df.iloc[valid_idx] = umap_embed[i]
+    
+    complete_umap_df.to_csv(output_path, index=True, sep='\t')
+    
+    # Save summary of skipped clonotypes
+    skipped_summary_path = os.path.join(args.output_dir, 'skipped_clonotypes_summary.txt')
+    with open(skipped_summary_path, 'w') as f:
+        f.write(f"Number of clonotypes skipped due to invalid amino acid sequences: {len(invalid_seq_indices)}\n")
+        f.write(f"Total clonotypes processed: {len(output_index)}\n")
+        f.write(f"Valid clonotypes: {len(valid_indices)}\n")
+        f.write(f"Skipped clonotypes: {len(invalid_seq_indices)}\n\n")
+        if invalid_seq_indices:
+            f.write("Skipped clonotypes:\n")
+            for invalid_idx in invalid_seq_indices:
+                clonotype_key = output_index.iloc[invalid_idx] if hasattr(output_index, 'iloc') else output_index[invalid_idx]
+                sequence = df_input.iloc[invalid_idx][seq_col]
+                f.write(f"{clonotype_key}\t{sequence}\n")
+        else:
+            f.write("No clonotypes were skipped.\n")
+    print(f"Skipped clonotypes summary saved to {skipped_summary_path}")
+    
     end_time_save = time.time()
     print(f'UMAP embeddings saved to {output_path} in {end_time_save - start_time_save:.2f} seconds.')
     
