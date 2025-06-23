@@ -4,16 +4,18 @@ import type {
   PlRef,
 } from '@platforma-sdk/model';
 import {
+  getRawPlatformaInstance,
   plRefsEqual,
 } from '@platforma-sdk/model';
 
 import '@milaboratories/graph-maker/styles';
-import { PlBlockPage, PlBtnGhost, PlDropdownRef, PlMultiSequenceAlignment, PlNumberField, PlSectionSeparator, PlSlideModal } from '@platforma-sdk/ui-vue';
+import { PlAlert, PlBlockPage, PlBtnGhost, PlDropdownRef, PlMultiSequenceAlignment, PlNumberField, PlSectionSeparator, PlSlideModal } from '@platforma-sdk/ui-vue';
 import { useApp } from '../app';
 
 import type { GraphMakerProps, PredefinedGraphOption } from '@milaboratories/graph-maker';
 import { GraphMaker } from '@milaboratories/graph-maker';
 import type { PlSelectionModel } from '@platforma-sdk/model';
+import { asyncComputed } from '@vueuse/core';
 import { computed, ref } from 'vue';
 import { isLabelColumnOption, isLinkerColumn, isSequenceColumn } from '../util';
 
@@ -53,6 +55,12 @@ const defaultOptions = computed((): GraphMakerProps['defaultOptions'] => {
   return defaults;
 });
 
+// Check if the UMAP file is empty
+const isEmpty = asyncComputed(async () => {
+  if (app.model.outputs.umapDim1Table === undefined) return undefined;
+  return (await getRawPlatformaInstance().pFrameDriver.getShape(app.model.outputs.umapDim1Table)).rows === 0;
+});
+
 const selection = ref<PlSelectionModel>({
   axesSpec: [],
   selectedKeys: [],
@@ -85,6 +93,7 @@ const multipleSequenceAlignmentOpen = ref(false);
           :options="app.model.outputs.inputOptions"
           label="Select dataset"
           required
+          :style="{ width: '320px' }"
           @update:model-value="setAnchorColumn"
         />
         <PlSectionSeparator>UMAP parameters</PlSectionSeparator>
@@ -95,6 +104,7 @@ const multipleSequenceAlignmentOpen = ref(false);
           :max="500"
           :step="5"
           required
+          :style="{ width: '320px' }"
         />
         <PlNumberField
           v-model="app.model.args.umap_min_dist"
@@ -103,7 +113,13 @@ const multipleSequenceAlignmentOpen = ref(false);
           :max="1"
           :step="0.1"
           required
+          :style="{ width: '320px' }"
         />
+        <PlAlert v-if="isEmpty === true" type="warn" :style="{ width: '320px' }">
+          <template #title>Empty dataset selection</template>
+          The input dataset you have selected is empty.
+          Please choose a different dataset.
+        </PlAlert>
       </template>
     </GraphMaker>
     <PlSlideModal v-model="multipleSequenceAlignmentOpen" width="100%">

@@ -14,6 +14,7 @@
     "@platforma-sdk/ui-vue": "catalog:",
     "@platforma-sdk/model": "catalog:",
     "@milaboratories/graph-maker": "catalog:",
+    "@vueuse/core": "catalog:",
     "vue": "catalog:",
     "@biowasm/aioli": "catalog:"
   },
