@@ -65,9 +65,9 @@ def kmer_count_vectors(sequences, k=3):
         numpy.ndarray: Sparse matrix of k-mer counts (CSR format)
     """
     print(f"Generating {k}-mer count vectors...")
-    # Standard amino acid alphabet (excluding '*' for stop codons if not desired in kmers)
+    # Standard amino acid alphabet, now including 'X', '*', and '_'
     amino_acids = ['A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 
-                   'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'Y']
+                   'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'Y', 'X', '*', '_']
     
     # Generate all possible k-mers
     all_kmers = [''.join(p) for p in itertools.product(amino_acids, repeat=k)]
@@ -361,11 +361,6 @@ def main():
     # Fill with UMAP embeddings for valid sequences
     for i, valid_idx in enumerate(valid_indices):
         complete_umap_df.iloc[valid_idx] = umap_embed[i]
-    
-    # Fill skipped sequences with NA
-    if invalid_seq_indices:
-        for invalid_idx in invalid_seq_indices:
-            complete_umap_df.iloc[invalid_idx] = ['NA'] * args.umap_components
     
     complete_umap_df.to_csv(output_path, index=True, sep='\t')
     
