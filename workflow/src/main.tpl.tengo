@@ -58,6 +58,7 @@ wf.body(func(args) {
 	////////// UMAP //////////
 	// Generate input TSV with Clonotype ID and aa sequence
 	umapTable := pframes.tsvFileBuilder()
+	umapTable.mem("8GB"); // TODO: make this dynamic on input size
 	umapTable.setAxisHeader(datasetSpec.axesSpec[1].name, "clonotypeKey")
 	for nc, col in columns.getColumns("aaSequence") {
 		if isSingleCell {
@@ -87,8 +88,7 @@ wf.body(func(args) {
 		arg("--umap-neighbors").arg(string(umap_neighbors)).
 		arg("--umap-min-dist").arg(string(umap_min_dist)).
 		saveFile("umap.tsv").
-		printErrStreamToStdout().
-		saveStdoutContent().
+		mem("32GB"). // TODO: make this dynamic on input size
 		cache(24 * 60 * 60 * 1000).
 		run()
 

@@ -1,5 +1,13 @@
 # @platforma-open/milaboratories.clonotype-space.ui
 
+## 2.2.4
+
+### Patch Changes
+
+- 280e8c4: [sdk/msa] seqlogo overlaps
+- Updated dependencies [280e8c4]
+  - @platforma-open/milaboratories.clonotype-space.model@2.2.4
+
 ## 2.2.3
 
 ### Patch Changes
