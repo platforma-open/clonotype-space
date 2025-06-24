@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.workflow
 
+## 2.6.0
+
+### Minor Changes
+
+- 05d2f21: hot fix for issue not updating script
+
 ## 2.5.0
 
 ### Minor Changes
