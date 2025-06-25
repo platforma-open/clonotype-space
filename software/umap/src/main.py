@@ -3,7 +3,7 @@
 kmer_umap.py: Command-line tool to convert amino acid sequences from a TSV file into 6-mer count vectors,
 compute pairwise Euclidean distances, perform PCA, and output only the final UMAP embeddings.
 
-Usage:
+Usage: 
     python kmer_umap.py \
         -i input.tsv -c sequence_column \
         -u umap.csv \
