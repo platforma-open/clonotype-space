@@ -1,5 +1,16 @@
 # @platforma-open/milaboratories.clonotype-space.workflow
 
+## 2.7.0
+
+### Minor Changes
+
+- a89c77d: try to update software
+
+### Patch Changes
+
+- Updated dependencies [a89c77d]
+  - @platforma-open/milaboratories.clonotype-space.umap@2.5.0
+
 ## 2.6.0
 
 ### Minor Changes

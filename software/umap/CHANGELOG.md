@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.umap
 
+## 2.5.0
+
+### Minor Changes
+
+- a89c77d: try to update software
+
 ## 2.4.0
 
 ### Minor Changes
