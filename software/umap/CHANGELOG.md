@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.umap
 
+## 2.6.0
+
+### Minor Changes
+
+- 7cd404b: Fix software issue
+
 ## 2.5.0
 
 ### Minor Changes

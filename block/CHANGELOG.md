@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space
 
+## 2.1.4
+
+### Patch Changes
+
+- @platforma-open/milaboratories.clonotype-space.workflow@2.7.1
+
 ## 2.1.3
 
 ### Patch Changes
