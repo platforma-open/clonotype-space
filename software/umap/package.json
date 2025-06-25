@@ -15,7 +15,6 @@
       "umap-artifact": {
         "type": "python",
         "registry": "platforma-open",
-        "version": "1.0.0",
         "environment": "@platforma-open/milaboratories.runenv-python-3:3.12.6",
         "dependencies": {
           "toolset": "pip",
