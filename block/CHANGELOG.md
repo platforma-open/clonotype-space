@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space
 
+## 2.1.6
+
+### Patch Changes
+
+- c4efe91: SDK update
+
 ## 2.1.5
 
 ### Patch Changes
