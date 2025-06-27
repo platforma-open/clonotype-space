@@ -1,5 +1,12 @@
 # @platforma-open/milaboratories.clonotype-space
 
+## 2.1.7
+
+### Patch Changes
+
+- Updated dependencies [6fcbff7]
+  - @platforma-open/milaboratories.clonotype-space.ui@2.4.2
+
 ## 2.1.6
 
 ### Patch Changes
