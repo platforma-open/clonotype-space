@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space
 
+## 2.2.0
+
+### Minor Changes
+
+- f0d07ac: allow prepare venv on Windows
+
 ## 2.1.7
 
 ### Patch Changes
