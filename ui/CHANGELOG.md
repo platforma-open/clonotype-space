@@ -1,5 +1,13 @@
 # @platforma-open/milaboratories.clonotype-space.ui
 
+## 2.4.3
+
+### Patch Changes
+
+- f88ef84: Ability to set CPU and MEM requests
+- Updated dependencies [f88ef84]
+  - @platforma-open/milaboratories.clonotype-space.model@2.3.1
+
 ## 2.4.2
 
 ### Patch Changes

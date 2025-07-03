@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.workflow
 
+## 2.7.2
+
+### Patch Changes
+
+- f88ef84: Ability to set CPU and MEM requests
+
 ## 2.7.1
 
 ### Patch Changes

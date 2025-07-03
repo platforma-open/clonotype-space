@@ -1,5 +1,15 @@
 # @platforma-open/milaboratories.clonotype-space
 
+## 2.2.1
+
+### Patch Changes
+
+- 87a8fa8: Bump version
+- Updated dependencies [f88ef84]
+  - @platforma-open/milaboratories.clonotype-space.workflow@2.7.2
+  - @platforma-open/milaboratories.clonotype-space.model@2.3.1
+  - @platforma-open/milaboratories.clonotype-space.ui@2.4.3
+
 ## 2.2.0
 
 ### Minor Changes
