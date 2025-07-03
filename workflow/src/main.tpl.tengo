@@ -77,11 +77,21 @@ wf.body(func(args) {
 	umapTable.cpu(1)
 	umapTable = umapTable.build()
 
+	mem := args.mem
+	if is_undefined(mem) {
+		mem = 64
+	}
+
+	cpu := args.cpu
+	if is_undefined(cpu) {
+		cpu = 8
+	}
+
 	// UMAP script should go here
 	umapClones := exec.builder().
 		software(assets.importSoftware("@platforma-open/milaboratories.clonotype-space.umap:main")).
-		mem("64GiB").
-		cpu(1).
+		mem(string(mem) + "GiB").
+		cpu(cpu).
 		addFile("sequences.tsv", umapTable).
 		arg("-i").arg("sequences.tsv").
 		arg("-u").arg("umap.tsv").
@@ -96,7 +106,11 @@ wf.body(func(args) {
 		umapClones.getFile("umap.tsv"),
 		"tsv",
 		umapConv.getColumns(datasetSpec, blockId), 
-		{ splitDataAndSpec: true, cpu: 1, mem: "16GiB" })
+		{ 
+			splitDataAndSpec: true,
+			cpu: 1,
+			mem: "16GiB" // TODO: make this dynamic on input size
+		})
 
 	// Make trace
 	trace := pSpec.makeTrace(datasetSpec,

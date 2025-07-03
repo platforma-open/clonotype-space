@@ -137,6 +137,44 @@ const multipleSequenceAlignmentOpen = ref(false);
               </div>
             </template>
           </PlNumberField>
+
+          <PlNumberField
+            v-model="app.model.args.mem"
+            label="Memory (GB)"
+            :min="8"
+            :max="1024"
+            :step="1"
+            :style="{ width: '320px' }"
+          >
+            <template #tooltip>
+              <div>
+                <strong>Memory (GB) for UMAP Calculation</strong><br>
+                Set the amount of memory (in GB) for the UMAP calculation. The right amount depends on the number of clonotypes in your dataset.<br><br>
+                <strong>Recommended Memory:</strong><br>
+                <strong>Small</strong> (&lt; 10k clonotypes): <strong>4-8 GB</strong><br>
+                <strong>Medium</strong> (10k - 100k clonotypes): <strong>8-32 GB</strong><br>
+                <strong>Large</strong> (&gt; 100k clonotypes): <strong>32+ GB</strong><br><br>
+
+                <hr>
+                ⚠️ Insufficient memory can cause the process to fail. If you run into errors, try increasing the allocated memory. <br>
+
+                <strong>Note:</strong> Larger values for the <code>n_neighbors</code> parameter can also increase memory usage.
+              </div>
+            </template>
+          </PlNumberField>
+
+          <PlNumberField
+            v-model="app.model.args.cpu"
+            label="CPU"
+            :min="1"
+            :max="128"
+            :step="1"
+            :style="{ width: '320px' }"
+          >
+            <template #tooltip>
+              Amount of CPU cores to request for the UMAP calculation.
+            </template>
+          </PlNumberField>
         </PlAccordionSection>
         <PlAlert v-if="isEmpty === true" type="warn" :style="{ width: '320px' }">
           <template #title>Empty dataset selection</template>

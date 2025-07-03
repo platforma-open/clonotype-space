@@ -20,6 +20,8 @@ export type BlockArgs = {
   inputAnchor?: PlRef;
   umap_neighbors: number;
   umap_min_dist: number;
+  cpu?: number;
+  mem?: number;
 };
 
 export type UiState = {
