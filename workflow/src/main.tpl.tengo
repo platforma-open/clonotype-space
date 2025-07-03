@@ -84,7 +84,7 @@ wf.body(func(args) {
 
 	cpu := args.cpu
 	if is_undefined(cpu) {
-		mem = 8
+		cpu = 8
 	}
 
 	// UMAP script should go here
