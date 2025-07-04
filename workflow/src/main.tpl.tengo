@@ -112,12 +112,18 @@ wf.body(func(args) {
 			mem: "16GiB" // TODO: make this dynamic on input size
 		})
 
+	// Make trace with informative label
+	neighborsStr := string(umap_neighbors)
+	minDistStr := string(umap_min_dist)
+	
+	traceLabel := "UMAP (neighbors:" + neighborsStr + ", min_dist:" + minDistStr + ")"
+	
 	// Make trace
 	trace := pSpec.makeTrace(datasetSpec,
 		{
 			type: "milaboratories.clonotype-space",
-			importance: 30,
-			label: "Clonotype Space"
+			importance: 20,
+			label: traceLabel
 		})
 
 	pf := pframes.pFrameBuilder()
