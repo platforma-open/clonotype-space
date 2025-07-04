@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.workflow
 
+## 2.8.0
+
+### Minor Changes
+
+- 336dd7c: Add informative trace
+
 ## 2.7.2
 
 ### Patch Changes
