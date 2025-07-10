@@ -116,6 +116,8 @@ export const model = BlockModel.create()
     return createPFrameForGraphs(ctx, pCols);
   })
 
+  .output('umapOutput', (ctx) => ctx.outputs?.resolve('umapOutput')?.getLogHandle())
+
   // Create a PTable with the first dimension of the UMAP to test if file is empty
   // output file will only be empty in cases where input data was empty
   .output('umapDim1Table', (ctx) => {
