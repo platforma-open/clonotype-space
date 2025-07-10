@@ -122,6 +122,13 @@ def create_umap_model(backend, components, neighbors, min_dist):
     print("Using CPU-based UMAP (umap-learn)...")
     return umap_learn.UMAP(n_jobs=-1, **common_params), 'cpu'
 
+# This is a hack to make the print statements flush to the console immediately
+# https://stackoverflow.com/questions/107705/disable-output-buffering
+_orig_print = print
+
+def print(*args, **kwargs):
+    _orig_print(*args, flush=True, **kwargs)
+
 def main():
     parser = argparse.ArgumentParser(
         description='Compute UMAP embeddings from amino acid sequences via k-mer counts and PCA.',
