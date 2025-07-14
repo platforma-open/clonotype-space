@@ -129,6 +129,19 @@ _orig_print = print
 def print(*args, **kwargs):
     _orig_print(*args, flush=True, **kwargs)
 
+def create_empty_umap_output(df_input, umap_components, output_path):
+    """Create empty UMAP output file with proper headers."""
+    umap_df = pd.DataFrame(
+        columns=[df_input.columns[0]] + [f'UMAP{i+1}' for i in range(umap_components)]
+    )
+    umap_df.to_csv(output_path, index=False, sep='\t')
+
+def create_empty_skipped_summary(output_dir, reason):
+    """Create skipped clonotypes summary file."""
+    skipped_summary_path = os.path.join(output_dir, 'skipped_clonotypes_summary.txt')
+    with open(skipped_summary_path, 'w') as f:
+        f.write(f"{reason}\n")
+
 def main():
     parser = argparse.ArgumentParser(
         description='Compute UMAP embeddings from amino acid sequences via k-mer counts and PCA.',
@@ -207,11 +220,8 @@ def main():
     output_path = os.path.join(args.output_dir, args.umap_output)
     if df_input.empty:
         print("Error: Input file is empty")
-        # Create empty UMAP file with header
-        umap_df = pd.DataFrame(
-                columns=[df_input.columns[0]] + [f'UMAP{i+1}' for i in range(args.umap_components)]
-                )
-        umap_df.to_csv(output_path, index=False, sep='\t')
+        create_empty_umap_output(df_input, args.umap_components, output_path)
+        create_empty_skipped_summary(args.output_dir, "UMAP analysis skipped due to empty input file.")
         sys.exit(0)
 
     seq_col_list = sorted([c for c in df_input.columns 
@@ -328,6 +338,23 @@ def main():
     else:
         print(f"Error: Unknown UMAP backend '{args.umap_backend}'. Exiting.")
         sys.exit(1)
+
+    # Check if we have enough sequences for UMAP
+    # UMAP requires at least n_neighbors + 1 sequences; also n_neighbors must be > 1 -> minimum 3 sequences
+    # Also enough data for spectral layout is needed, you need at least 2 more samples than
+    # the number of dimensions (2 by default) -> at least 4 sequences or n_neighbors + 1
+    # https://github.com/lmcinnes/umap/issues/201
+    min_required_sequences = max(args.umap_neighbors + 1, 4)
+    if num_total_sequences < min_required_sequences:
+        print("Warning: Not enough sequences for UMAP analysis.")
+        print("UMAP requires at least n_neighbors + 1 sequences.")
+        print(f"Required: {min_required_sequences}, Available: {num_total_sequences}.")
+        print("If possible, consider reducing the number of neighbors.")
+        
+        create_empty_umap_output(df_input, args.umap_components, output_path)
+        create_empty_skipped_summary(args.output_dir, "UMAP analysis skipped due to insufficient sequences.")
+        
+        sys.exit(0)
 
     # --- Start Timing: UMAP Fitting ---
     start_time_umap_fit = time.time()

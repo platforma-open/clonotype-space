@@ -107,10 +107,11 @@ const umapLogOpen = ref(false);
           <PlNumberField
             v-model="app.model.args.umap_neighbors"
             label="N Neighbors"
-            :min="5"
+            :min="2"
             :max="500"
             :step="5"
             required
+            :validate="(value) => value !== undefined && value < 2 ? 'UMAP requires at least 2 neighbors' : undefined"
             :style="{ width: '320px' }"
           >
             <template #tooltip>
@@ -185,7 +186,7 @@ const umapLogOpen = ref(false);
         </PlAccordionSection>
         <PlAlert v-if="isEmpty === true" type="warn" :style="{ width: '320px' }">
           <template #title>Empty dataset selection</template>
-          The input dataset you have selected is empty.
+          The input dataset you have selected is empty or has too few sequences.
           Please choose a different dataset.
         </PlAlert>
       </template>
