@@ -1,5 +1,12 @@
 # @platforma-open/milaboratories.clonotype-space.ui
 
+## 2.4.4
+
+### Patch Changes
+
+- 7379529: MSA updates
+- ed663b8: Only allow aa alignment
+
 ## 2.4.3
 
 ### Patch Changes
