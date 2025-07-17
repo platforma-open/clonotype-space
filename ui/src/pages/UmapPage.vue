@@ -9,7 +9,7 @@ import {
 } from '@platforma-sdk/model';
 
 import '@milaboratories/graph-maker/styles';
-import { PlAccordionSection, PlAlert, PlBlockPage, PlBtnGhost, PlDropdownRef, PlMultiSequenceAlignment, PlNumberField, PlSlideModal } from '@platforma-sdk/ui-vue';
+import { PlAccordionSection, PlAlert, PlBlockPage, PlBtnGhost, PlDropdownRef, PlLogView, PlMaskIcon24, PlMultiSequenceAlignment, PlNumberField, PlSlideModal } from '@platforma-sdk/ui-vue';
 import { useApp } from '../app';
 
 import type { GraphMakerProps, PredefinedGraphOption } from '@milaboratories/graph-maker';
@@ -67,6 +67,7 @@ const selection = ref<PlSelectionModel>({
 });
 
 const multipleSequenceAlignmentOpen = ref(false);
+const umapLogOpen = ref(false);
 </script>
 
 <template>
@@ -86,6 +87,12 @@ const multipleSequenceAlignmentOpen = ref(false);
         >
           Multiple Sequence Alignment
         </PlBtnGhost>
+        <PlBtnGhost @click.stop="() => (umapLogOpen = true)">
+          UMAP Log
+          <template #append>
+            <PlMaskIcon24 name="progress" />
+          </template>
+        </PlBtnGhost>
       </template>
       <template #settingsSlot>
         <PlDropdownRef
@@ -100,10 +107,11 @@ const multipleSequenceAlignmentOpen = ref(false);
           <PlNumberField
             v-model="app.model.args.umap_neighbors"
             label="N Neighbors"
-            :min="5"
+            :min="2"
             :max="500"
             :step="5"
             required
+            :validate="(value) => value !== undefined && value < 2 ? 'UMAP requires at least 2 neighbors' : undefined"
             :style="{ width: '320px' }"
           >
             <template #tooltip>
@@ -178,7 +186,7 @@ const multipleSequenceAlignmentOpen = ref(false);
         </PlAccordionSection>
         <PlAlert v-if="isEmpty === true" type="warn" :style="{ width: '320px' }">
           <template #title>Empty dataset selection</template>
-          The input dataset you have selected is empty.
+          The input dataset you have selected is empty or has too few sequences.
           Please choose a different dataset.
         </PlAlert>
       </template>
@@ -195,6 +203,10 @@ const multipleSequenceAlignmentOpen = ref(false);
         :p-frame="app.model.outputs.msaPf"
         :selection="selection"
       />
+    </PlSlideModal>
+    <PlSlideModal v-model="umapLogOpen" width="80%">
+      <template #title>UMAP Log</template>
+      <PlLogView :log-handle="app.model.outputs.umapOutput"/>
     </PlSlideModal>
   </PlBlockPage>
 </template>
