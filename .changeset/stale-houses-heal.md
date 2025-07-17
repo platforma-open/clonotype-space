@@ -5,4 +5,4 @@
 '@platforma-open/milaboratories.clonotype-space.ui': minor
 ---
 
-Add UMAP log to UI
+Add UMAP log to UI and fix UMAP error on insufficient clonotype sequences
