@@ -30,7 +30,7 @@ function setAnchorColumn(ref: PlRef | undefined) {
     : '');
 }
 
-const defaultOptions = computed((): GraphMakerProps['defaultOptions'] => {
+const defaultOptions = computed((): PredefinedGraphOption<'scatterplot-umap'>[] | undefined => {
   if (!app.model.outputs.umapPcols)
     return undefined;
 
