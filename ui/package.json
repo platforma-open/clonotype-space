@@ -1,6 +1,6 @@
 {
   "name": "@platforma-open/milaboratories.clonotype-space.ui",
-  "version": "2.4.4",
+  "version": "2.4.5",
   "type": "module",
   "scripts": {
     "dev": "vite",
