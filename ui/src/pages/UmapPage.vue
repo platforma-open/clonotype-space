@@ -115,86 +115,113 @@ watch(
           :style="{ width: '320px' }"
           @update:model-value="setAnchorColumn"
         />
-        <PlAccordionSection label="UMAP parameters" :style="{ width: '320px' }">
-          <PlNumberField
-            v-model="app.model.args.umap_neighbors"
-            label="N Neighbors"
-            :min="2"
-            :max="500"
-            :step="5"
-            required
-            :validate="(value) => value !== undefined && value < 2 ? 'UMAP requires at least 2 neighbors' : undefined"
-            :style="{ width: '320px' }"
-          >
-            <template #tooltip>
-              <div>
-                <strong>Number of Neighbors for UMAP</strong><br>
-                Controls the balance between local and global structure in UMAP visualization.<br><br>
-                <strong>Recommended ranges:</strong><br>
-                • 10-30: Optimal for most datasets<br>
-                • 5-10: Emphasizes local structure (more clusters)<br>
-                • 30+: Emphasizes global structure (fewer clusters)<br><br>
-              </div>
-            </template>
-          </PlNumberField>
-          <PlNumberField
-            v-model="app.model.args.umap_min_dist"
-            label="Min Distance"
-            :min="0"
-            :max="1"
-            :step="0.1"
-            required
-            :style="{ width: '320px' }"
-          >
-            <template #tooltip>
-              <div>
-                <strong>Minimum Distance for UMAP</strong><br>
-                Controls how tightly UMAP packs points together. Lower values create denser clusters, while higher values preserve broader structure.<br><br>
-                <strong>Recommended ranges:</strong><br>
-                • 0.0 - 0.2: For creating tight clusters.<br>
-                • 0.2 - 0.5: A good balance for most datasets.<br>
-                • 0.5 - 1.0: For a more global view of the data.<br><br>
-              </div>
-            </template>
-          </PlNumberField>
 
-          <PlNumberField
-            v-model="app.model.args.mem"
-            label="Memory (GB)"
-            :min="8"
-            :max="1024"
-            :step="1"
-            :style="{ width: '320px' }"
-          >
-            <template #tooltip>
-              <div>
-                <strong>Memory (GB) for UMAP Calculation</strong><br>
-                Set the amount of memory (in GB) for the UMAP calculation. The right amount depends on the number of clonotypes in your dataset.<br><br>
-                <strong>Recommended Memory:</strong><br>
-                <strong>Small</strong> (&lt; 10k clonotypes): <strong>4-8 GB</strong><br>
-                <strong>Medium</strong> (10k - 100k clonotypes): <strong>8-32 GB</strong><br>
-                <strong>Large</strong> (&gt; 100k clonotypes): <strong>32+ GB</strong><br><br>
+        <PlAccordionSection label="UMAP Parameters" :style="{ width: '320px' }">
+          <div :style="{ display: 'flex', gap: '8px', width: '320px' }">
+            <PlNumberField
+              v-model="app.model.args.umap_neighbors"
+              label="Neighbors"
+              placeholder="15"
+              :min="2"
+              :max="500"
+              :step="5"
+              required
+              :validate="(value) => value === undefined ? 'Neighbors is required' : (value < 2 ? 'UMAP requires at least 2 neighbors' : undefined)"
+              :style="{ flex: 1 }"
+            >
+              <template #tooltip>
+                <div>
+                  <strong>Number of Neighbors for UMAP</strong><br>
+                  Controls the balance between local and global structure in UMAP visualization.<br><br>
+                  <strong>Default:</strong> 15 neighbors<br><br>
+                  <strong>Recommended ranges:</strong><br>
+                  • 10-30: Optimal for most datasets<br>
+                  • 5-10: Emphasizes local structure (more clusters)<br>
+                  • 30+: Emphasizes global structure (fewer clusters)<br><br>
+                </div>
+              </template>
+            </PlNumberField>
+            <PlNumberField
+              v-model="app.model.args.umap_min_dist"
+              label="Minimum Distance"
+              placeholder="0.5"
+              :min="0"
+              :max="1"
+              :step="0.1"
+              required
+              :validate="(value) => value === undefined ? 'Minimum Distance is required' : undefined"
+              :style="{ flex: 1 }"
+            >
+              <template #tooltip>
+                <div>
+                  <strong>Minimum Distance for UMAP</strong><br>
+                  Controls how tightly UMAP packs points together. Lower values create denser clusters, while higher values preserve broader structure.<br><br>
+                  <strong>Default:</strong> 0.5<br><br>
+                  <strong>Recommended ranges:</strong><br>
+                  • 0.0 - 0.2: For creating tight clusters.<br>
+                  • 0.2 - 0.5: A good balance for most datasets.<br>
+                  • 0.5 - 1.0: For a more global view of the data.<br><br>
+                </div>
+              </template>
+            </PlNumberField>
+          </div>
+        </PlAccordionSection>
 
-                <hr>
-                ⚠️ Insufficient memory can cause the process to fail. If you run into errors, try increasing the allocated memory. <br>
+        <PlAccordionSection label="Performance Settings" :style="{ width: '320px' }">
+          <div :style="{ display: 'flex', gap: '8px', width: '320px' }">
+            <PlNumberField
+              v-model="app.model.args.mem"
+              label="Memory (GB)"
+              placeholder="64"
+              :min="8"
+              :max="1024"
+              :step="1"
+              required
+              :validate="(value) => value === undefined ? 'Memory is required' : undefined"
+              :style="{ flex: 1 }"
+            >
+              <template #tooltip>
+                <div>
+                  <strong>Memory Allocation for UMAP Calculation</strong><br>
+                  Set the amount of memory (in GB) for the UMAP calculation. The right amount depends on the number of clonotypes in your dataset.<br><br>
+                  <strong>Default:</strong> 64 GB<br><br>
+                  <strong>Recommended Memory:</strong><br>
+                  <strong>Small</strong> (&lt; 10k clonotypes): <strong>4-8 GB</strong><br>
+                  <strong>Medium</strong> (10k - 100k clonotypes): <strong>8-32 GB</strong><br>
+                  <strong>Large</strong> (&gt; 100k clonotypes): <strong>32+ GB</strong><br><br>
 
-                <strong>Note:</strong> Larger values for the <code>n_neighbors</code> parameter can also increase memory usage.
-              </div>
-            </template>
-          </PlNumberField>
+                  <hr>
+                  ⚠️ Insufficient memory can cause the process to fail. If you run into errors, try increasing the allocated memory. <br>
 
-          <PlNumberField
-            v-model="app.model.args.cpu"
-            label="CPU"
-            :min="1"
-            :max="128"
-            :step="1"
-            :style="{ width: '320px' }"
-          >
-            <template #tooltip>
-              Amount of CPU cores to request for the UMAP calculation.
-            </template>
-          </PlNumberField>
+                  <strong>Note:</strong> Larger values for the <code>neighbors</code> parameter can also increase memory usage.
+                </div>
+              </template>
+            </PlNumberField>
+
+            <PlNumberField
+              v-model="app.model.args.cpu"
+              label="CPU"
+              placeholder="8"
+              :min="1"
+              :max="128"
+              :step="1"
+              required
+              :validate="(value) => value === undefined ? 'CPU is required' : undefined"
+              :style="{ flex: 1 }"
+            >
+              <template #tooltip>
+                <div>
+                  <strong>CPU Cores for UMAP Calculation</strong><br>
+                  Number of CPU cores to allocate for the UMAP calculation. More cores can speed up computation, especially for larger datasets.<br><br>
+                  <strong>Default:</strong> 8 cores<br><br>
+                  <strong>Recommended:</strong><br>
+                  • Small datasets: 2-4 cores<br>
+                  • Medium datasets: 4-8 cores<br>
+                  • Large datasets: 8+ cores<br>
+                </div>
+              </template>
+            </PlNumberField>
+          </div>
         </PlAccordionSection>
         <PlAlert v-if="isEmpty === true" type="warn" :style="{ width: '320px' }">
           <template #title>Empty dataset selection</template>

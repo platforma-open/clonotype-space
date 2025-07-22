@@ -78,14 +78,7 @@ wf.body(func(args) {
 	umapTable = umapTable.build()
 
 	mem := args.mem
-	if is_undefined(mem) {
-		mem = 64
-	}
-
 	cpu := args.cpu
-	if is_undefined(cpu) {
-		cpu = 8
-	}
 
 	// UMAP script should go here
 	umapClones := exec.builder().

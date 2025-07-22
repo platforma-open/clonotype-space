@@ -20,8 +20,8 @@ export type BlockArgs = {
   inputAnchor?: PlRef;
   umap_neighbors: number;
   umap_min_dist: number;
-  cpu?: number;
-  mem?: number;
+  cpu: number;
+  mem: number;
 };
 
 export type UiState = {
@@ -65,6 +65,8 @@ export const model = BlockModel.create()
   .withArgs<BlockArgs>({
     umap_neighbors: 15,
     umap_min_dist: 0.5,
+    mem: 64,
+    cpu: 8,
   })
 
   .withUiState<UiState>({
@@ -82,7 +84,13 @@ export const model = BlockModel.create()
     alignmentModel: {},
   })
 
-  .argsValid((ctx) => ctx.args.inputAnchor !== undefined)
+  .argsValid((ctx) => 
+    ctx.args.inputAnchor !== undefined && 
+    ctx.args.umap_neighbors !== undefined && 
+    ctx.args.umap_min_dist !== undefined &&
+    ctx.args.mem !== undefined &&
+    ctx.args.cpu !== undefined
+  )
 
   .output('inputOptions', (ctx) =>
     ctx.resultPool.getOptions([{
