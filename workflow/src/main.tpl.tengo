@@ -78,14 +78,7 @@ wf.body(func(args) {
 	umapTable = umapTable.build()
 
 	mem := args.mem
-	if is_undefined(mem) {
-		mem = 64
-	}
-
 	cpu := args.cpu
-	if is_undefined(cpu) {
-		cpu = 8
-	}
 
 	// UMAP script should go here
 	umapClones := exec.builder().
@@ -99,8 +92,12 @@ wf.body(func(args) {
 		arg("--umap-min-dist").arg(string(umap_min_dist)).
 		saveFile("umap.tsv").
 		saveFile("skipped_clonotypes_summary.txt").
+		printErrStreamToStdout().
+		//saveStdoutContent().
 		cache(24 * 60 * 60 * 1000).
 		run()
+
+	umapOutput := umapClones.getStdoutStream()
 
 	umapPf := xsv.importFile(
 		umapClones.getFile("umap.tsv"),
@@ -136,7 +133,8 @@ wf.body(func(args) {
 
 	return {
 		outputs: {
-			umapPf: pframes.exportFrame(pf)
+			umapPf: pframes.exportFrame(pf),
+			umapOutput: umapOutput
 		},
 		exports: {
 			umapPf: pf
