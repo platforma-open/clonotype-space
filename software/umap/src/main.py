@@ -37,6 +37,15 @@ Sampling Strategy (Internal Logic):
   - If total sequences >= 200,000: Sample 100,000 sequences for UMAP fitting.
 """
 
+import warnings
+# Suppress UMAP spectral initialization warnings that are noisy but harmless
+warnings.filterwarnings("ignore", message="Spectral initialisation failed!")
+warnings.filterwarnings("ignore", message="Falling back to random initialisation!")
+# Suppress sklearn deprecation warnings
+warnings.filterwarnings("ignore", message="'force_all_finite' was renamed to 'ensure_all_finite'")
+# Suppress UMAP n_jobs override warnings
+warnings.filterwarnings("ignore", message="n_jobs value .* overridden to .* by setting random_state")
+
 import argparse
 import itertools
 import numpy as np
