@@ -12,13 +12,13 @@ import '@milaboratories/graph-maker/styles';
 import { PlAccordionSection, PlAlert, PlBlockPage, PlBtnGhost, PlDropdownRef, PlLogView, PlMaskIcon24, PlMultiSequenceAlignment, PlNumberField, PlSlideModal } from '@platforma-sdk/ui-vue';
 import { useApp } from '../app';
 
-import type { GraphMakerProps, PredefinedGraphOption } from '@milaboratories/graph-maker';
+import type { PredefinedGraphOption } from '@milaboratories/graph-maker';
 import { GraphMaker } from '@milaboratories/graph-maker';
 import type { PlSelectionModel } from '@platforma-sdk/model';
 import { asyncComputed } from '@vueuse/core';
 
 import { computed, ref, watch } from 'vue';
-import { isLabelColumnOption, isLinkerColumn, isSequenceColumn } from '../util';
+import { isSequenceColumn } from '../util';
 
 const app = useApp();
 
