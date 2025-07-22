@@ -1,6 +1,6 @@
 {
   "name": "@platforma-open/milaboratories.clonotype-space.ui",
-  "version": "2.4.3",
+  "version": "2.4.5",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,19 +10,18 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@platforma-open/milaboratories.clonotype-space.model": "workspace:*",
-    "@platforma-sdk/ui-vue": "catalog:",
-    "@platforma-sdk/model": "catalog:",
     "@milaboratories/graph-maker": "catalog:",
+    "@platforma-open/milaboratories.clonotype-space.model": "workspace:*",
+    "@platforma-sdk/model": "catalog:",
+    "@platforma-sdk/ui-vue": "catalog:",
     "@vueuse/core": "catalog:",
-    "vue": "catalog:",
-    "@biowasm/aioli": "catalog:"
+    "vue": "catalog:"
   },
   "devDependencies": {
+    "@platforma-sdk/eslint-config": "catalog:",
     "@vitejs/plugin-vue": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
-    "vue-tsc": "catalog:",
-    "@platforma-sdk/eslint-config": "catalog:"
+    "vue-tsc": "catalog:"
   }
 }

@@ -16,6 +16,7 @@ import type { GraphMakerProps, PredefinedGraphOption } from '@milaboratories/gra
 import { GraphMaker } from '@milaboratories/graph-maker';
 import type { PlSelectionModel } from '@platforma-sdk/model';
 import { asyncComputed } from '@vueuse/core';
+
 import { computed, ref, watch } from 'vue';
 import { isLabelColumnOption, isLinkerColumn, isSequenceColumn } from '../util';
 
@@ -30,7 +31,7 @@ function setAnchorColumn(ref: PlRef | undefined) {
     : '');
 }
 
-const defaultOptions = computed((): GraphMakerProps['defaultOptions'] => {
+const defaultOptions = computed((): PredefinedGraphOption<'scatterplot-umap'>[] | undefined => {
   if (!app.model.outputs.umapPcols)
     return undefined;
 
@@ -230,13 +231,15 @@ watch(
         </PlAlert>
       </template>
     </GraphMaker>
-    <PlSlideModal v-model="multipleSequenceAlignmentOpen" width="100%">
+    <PlSlideModal
+      v-model="multipleSequenceAlignmentOpen"
+      width="100%"
+      :close-on-outside-click="false"
+    >
       <template #title>Multiple Sequence Alignment</template>
       <PlMultiSequenceAlignment
         v-model="app.model.ui.alignmentModel"
-        :label-column-option-predicate="isLabelColumnOption"
         :sequence-column-predicate="isSequenceColumn"
-        :linker-column-predicate="isLinkerColumn"
         :p-frame="app.model.outputs.msaPf"
         :selection="selection"
       />

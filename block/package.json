@@ -1,6 +1,6 @@
 {
   "name": "@platforma-open/milaboratories.clonotype-space",
-  "version": "2.2.3",
+  "version": "2.2.5",
   "scripts": {
     "pretty": "prettier --write \"./**/*.{js,jsx,mjs,cjs,ts,tsx,json,vue}\"",
     "build": "rm -rf ./block-pack && block-tools pack",
@@ -27,7 +27,7 @@
     "meta": {
       "title": "Clonotype Space",
       "logo": "file:../logos/block-logo.png",
-      "url": "https://github.com/platforma-open/milaboratories.clonotype-space",
+      "url": "https://github.com/platforma-open/clonotype-space",
       "support": "mailto:support@milaboratories.com",
       "description": "Visualize clonotype relationships using k-mer-based dimensionality reduction and UMAP projection.",
       "longDescription": "file:../docs/description.md",
