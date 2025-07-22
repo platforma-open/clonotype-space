@@ -16,7 +16,7 @@ import type { GraphMakerProps, PredefinedGraphOption } from '@milaboratories/gra
 import { GraphMaker } from '@milaboratories/graph-maker';
 import type { PlSelectionModel } from '@platforma-sdk/model';
 import { asyncComputed } from '@vueuse/core';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { isLabelColumnOption, isLinkerColumn, isSequenceColumn } from '../util';
 
 const app = useApp();
@@ -68,6 +68,18 @@ const selection = ref<PlSelectionModel>({
 
 const multipleSequenceAlignmentOpen = ref(false);
 const umapLogOpen = ref(false);
+
+// Auto-close settings panel when block starts running
+watch(
+  () => app.model.outputs.isRunning,
+  (isRunning, wasRunning) => {
+    // Close settings when block starts running (false -> true transition)
+    if (isRunning && !wasRunning) {
+      // Close the settings tab by setting currentTab to null
+      app.model.ui.graphStateUMAP.currentTab = null;
+    }
+  },
+);
 </script>
 
 <template>
@@ -88,7 +100,7 @@ const umapLogOpen = ref(false);
           Multiple Sequence Alignment
         </PlBtnGhost>
         <PlBtnGhost @click.stop="() => (umapLogOpen = true)">
-          UMAP Log
+          Logs
           <template #append>
             <PlMaskIcon24 name="progress" />
           </template>
@@ -186,7 +198,7 @@ const umapLogOpen = ref(false);
         </PlAccordionSection>
         <PlAlert v-if="isEmpty === true" type="warn" :style="{ width: '320px' }">
           <template #title>Empty dataset selection</template>
-          The input dataset you have selected is empty or has too few sequences.
+          The input dataset you have selected is empty or has too few clonotypes.
           Please choose a different dataset.
         </PlAlert>
       </template>
