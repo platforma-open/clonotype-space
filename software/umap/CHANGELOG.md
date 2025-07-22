@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.umap
 
+## 2.7.0
+
+### Minor Changes
+
+- efcaca3: Add UMAP log to UI and fix UMAP error on insufficient clonotype sequences
+
 ## 2.6.0
 
 ### Minor Changes
