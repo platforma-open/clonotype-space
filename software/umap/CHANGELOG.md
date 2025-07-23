@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.umap
 
+## 2.7.1
+
+### Patch Changes
+
+- 611033a: Update used python package versions
+
 ## 2.7.0
 
 ### Minor Changes
