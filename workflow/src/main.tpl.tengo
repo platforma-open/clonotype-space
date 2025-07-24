@@ -60,7 +60,7 @@ wf.body(func(args) {
 	umapTable := pframes.tsvFileBuilder()
 	umapTable.mem("8GB"); // TODO: make this dynamic on input size
 	umapTable.setAxisHeader(datasetSpec.axesSpec[1].name, "clonotypeKey")
-	for nc, col in columns.getColumns("aaSequence") {
+	for col in columns.getColumns("aaSequence") {
 		if isSingleCell {
 			// scFv case
 			if col.spec.name == "pl7.app/vdj/scFv-sequence" {
