@@ -65,12 +65,13 @@ wf.body(func(args) {
 			// scFv case
 			if col.spec.name == "pl7.app/vdj/scFv-sequence" {
 				umapTable.add(col, {header: "aaSequence.scFv"})
-			// single cell case
 			} else {
+				// single cell case
 				chainLabel := col.spec.domain["pl7.app/vdj/scClonotypeChain"]
 				umapTable.add(col, {header: "aaSequence." + chainLabel})
-			// bulk case
+			}
 		} else {
+			// bulk case
 			chainLabel := col.spec.axesSpec[0].domain["pl7.app/vdj/chain"]
 			umapTable.add(col, {header: "aaSequence." + chainLabel})
 		}
