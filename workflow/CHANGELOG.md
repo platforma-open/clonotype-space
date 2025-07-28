@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.workflow
 
+## 2.10.0
+
+### Minor Changes
+
+- 1751f19: fix scfv support
+
 ## 2.9.1
 
 ### Patch Changes
