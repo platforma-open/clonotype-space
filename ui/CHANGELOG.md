@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.ui
 
+## 2.5.1
+
+### Patch Changes
+
+- ac1d325: update graph-maker version
+
 ## 2.5.0
 
 ### Minor Changes
