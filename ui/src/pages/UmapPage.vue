@@ -84,7 +84,7 @@ watch(
 </script>
 
 <template>
-  <PlBlockPage>
+  <PlBlockPage no-body-gutters>
     <GraphMaker
       v-model="app.model.ui.graphStateUMAP"
       v-model:selection="selection"
