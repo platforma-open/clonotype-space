@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.ui
 
+## 2.5.2
+
+### Patch Changes
+
+- 36adaab: remove extra padding
+
 ## 2.5.1
 
 ### Patch Changes
