@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.model
 
+## 2.4.1
+
+### Patch Changes
+
+- 27066d8: Full SDK update
+
 ## 2.4.0
 
 ### Minor Changes
