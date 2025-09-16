@@ -84,12 +84,12 @@ export const model = BlockModel.create()
     alignmentModel: {},
   })
 
-  .argsValid((ctx) => 
-    ctx.args.inputAnchor !== undefined && 
-    ctx.args.umap_neighbors !== undefined && 
-    ctx.args.umap_min_dist !== undefined &&
-    ctx.args.mem !== undefined &&
-    ctx.args.cpu !== undefined
+  .argsValid((ctx) =>
+    ctx.args.inputAnchor !== undefined
+    && ctx.args.umap_neighbors !== undefined
+    && ctx.args.umap_min_dist !== undefined
+    && ctx.args.mem !== undefined
+    && ctx.args.cpu !== undefined,
   )
 
   .output('inputOptions', (ctx) =>
@@ -165,6 +165,6 @@ export const model = BlockModel.create()
     { type: 'link', href: '/', label: 'Main' },
   ]))
 
-  .done();
+  .done(2);
 
 export type BlockOutputs = InferOutputsType<typeof model>;

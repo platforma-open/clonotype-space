@@ -8,7 +8,7 @@
     "changeset": "changeset",
     "version-packages": "changeset version",
     "build": "pl-pkg build",
-    "prepublishOnly": "pl-pkg publish packages"
+    "prepublishOnly": "pl-pkg prepublish"
   },
   "block-software": {
     "entrypoints": {
