@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.ui
 
+## 2.5.4
+
+### Patch Changes
+
+- f5a9f34: Update SDK
+
 ## 2.5.3
 
 ### Patch Changes
