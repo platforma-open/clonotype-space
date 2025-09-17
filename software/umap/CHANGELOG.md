@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.umap
 
+## 2.7.4
+
+### Patch Changes
+
+- 59192ec: Update python
+
 ## 2.7.3
 
 ### Patch Changes
