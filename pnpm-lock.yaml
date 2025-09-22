@@ -140,7 +140,7 @@ importers:
   test:
     dependencies:
       this-block:
-        specifier: workspace:@platforma-open/milaboratories.clonotype-space@^
+        specifier: workspace:@platforma-open/milaboratories.clonotype-space@*
         version: link:../block
     devDependencies:
       '@platforma-sdk/test':
