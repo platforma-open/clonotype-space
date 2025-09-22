@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.umap
 
+## 2.7.5
+
+### Patch Changes
+
+- 8fca895: technical release
+
 ## 2.7.4
 
 ### Patch Changes

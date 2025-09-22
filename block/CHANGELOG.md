@@ -1,5 +1,15 @@
 # @platforma-open/milaboratories.clonotype-space
 
+## 2.2.15
+
+### Patch Changes
+
+- 8fca895: technical release
+- Updated dependencies [8fca895]
+  - @platforma-open/milaboratories.clonotype-space.model@2.4.2
+  - @platforma-open/milaboratories.clonotype-space.ui@2.5.5
+  - @platforma-open/milaboratories.clonotype-space.workflow@2.10.4
+
 ## 2.2.14
 
 ### Patch Changes

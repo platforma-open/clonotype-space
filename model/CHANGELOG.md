@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.model
 
+## 2.4.2
+
+### Patch Changes
+
+- 8fca895: technical release
+
 ## 2.4.1
 
 ### Patch Changes

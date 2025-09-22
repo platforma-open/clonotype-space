@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.test
 
+## 2.0.5
+
+### Patch Changes
+
+- 8fca895: technical release
+
 ## 2.0.4
 
 ### Patch Changes
