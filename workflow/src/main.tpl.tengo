@@ -3,6 +3,7 @@ exec := import("@platforma-sdk/workflow-tengo:exec")
 assets:= import("@platforma-sdk/workflow-tengo:assets")
 smart := import("@platforma-sdk/workflow-tengo:smart")
 ll := import("@platforma-sdk/workflow-tengo:ll")
+render := import("@platforma-sdk/workflow-tengo:render")
 
 xsv := import("@platforma-sdk/workflow-tengo:pframes.xsv")
 pframes := import("@platforma-sdk/workflow-tengo:pframes")
@@ -11,6 +12,7 @@ slices := import("@platforma-sdk/workflow-tengo:slices")
 umapConv := import(":pf-umap-conv")
 
 pSpec := import("@platforma-sdk/workflow-tengo:pframes.spec")
+umapCalculationTpl := assets.importTemplate(":umap-calculation")
 
 wf.prepare(func(args){
 	// We need a table with cluster ID (optional) | clonotype id | selected ranking columns
@@ -83,27 +85,22 @@ wf.body(func(args) {
 	mem := args.mem
 	cpu := args.cpu
 
-	// UMAP script should go here
-	umapClones := exec.builder().
-		software(assets.importSoftware("@platforma-open/milaboratories.clonotype-space.umap:main")).
-		mem(string(mem) + "GiB").
-		cpu(cpu).
-		addFile("sequences.tsv", umapTable).
-		arg("-i").arg("sequences.tsv").
-		arg("-u").arg("umap.tsv").
-		arg("--umap-neighbors").arg(string(umap_neighbors)).
-		arg("--umap-min-dist").arg(string(umap_min_dist)).
-		saveFile("umap.tsv").
-		saveFile("skipped_clonotypes_summary.txt").
-		printErrStreamToStdout().
-		//saveStdoutContent().
-		cache(24 * 60 * 60 * 1000).
-		run()
+	// Call UMAP calculation subtemplate
+	umapRender := render.create(umapCalculationTpl, {
+		umapTable: umapTable,
+		umap_neighbors: umap_neighbors,
+		umap_min_dist: umap_min_dist,
+		mem: mem,
+		cpu: cpu
+	})
 
-	umapOutput := umapClones.getStdoutStream()
+	// Get UMAP file and stdout stream from subtemplate
+	umapTsVFile := umapRender.output("umapTsVFile")
+	umapOutput := umapRender.output("umapOutput")
 
+	// Import UMAP results to PFrame
 	umapPf := xsv.importFile(
-		umapClones.getFile("umap.tsv"),
+		umapTsVFile,
 		"tsv",
 		umapConv.getColumns(datasetSpec, blockId), 
 		{ 
