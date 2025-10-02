@@ -1,3 +1,5 @@
+//tengo:hash_override 2C092F89-E50F-4091-8E3F-0C2298E19430
+
 self := import("@platforma-sdk/workflow-tengo:tpl")
 exec := import("@platforma-sdk/workflow-tengo:exec")
 assets := import("@platforma-sdk/workflow-tengo:assets")
