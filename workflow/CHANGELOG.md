@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.workflow
 
+## 2.11.0
+
+### Minor Changes
+
+- 21d9baa: Fixed deduplication
+
 ## 2.10.4
 
 ### Patch Changes
