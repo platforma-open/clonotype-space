@@ -43,7 +43,7 @@ getColumns := func(datasetSpec, blockId) {
           }
         }
       }],
-    storageFormat: "Binary",
+    storageFormat: "Parquet",
     partitionKeyLength: 0
   }
 }

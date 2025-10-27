@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.workflow
 
+## 2.11.2
+
+### Patch Changes
+
+- f3fc1fb: Support parquet format (update SDK)
+
 ## 2.11.1
 
 ### Patch Changes
