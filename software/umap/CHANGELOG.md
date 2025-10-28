@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.umap
 
+## 2.8.0
+
+### Minor Changes
+
+- d2c5287: Use new python env with RAPIDS
+
 ## 2.7.6
 
 ### Patch Changes
