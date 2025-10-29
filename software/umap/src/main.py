@@ -115,13 +115,15 @@ def create_umap_model(backend, components, neighbors, min_dist):
     
     if backend == 'cuml' or (backend == 'auto'):
         try:
-            import cuml.manifold.umap as cuml_umap
             import torch
-            if torch.cuda.is_available():
+            if torch.cuda.is_available() & torch.cuda.device_count() > 0:
+                import cuml.manifold.umap as cuml_umap
                 print("Using GPU-accelerated UMAP (RAPIDS cuML)...")
                 return cuml_umap.UMAP(**common_params, init = 'spectral', n_epochs = 2000), 'gpu'
-        except ImportError:
-            print("RAPIDS cuML not available. Using CPU-based UMAP...")
+            else:
+                print(f"GPU not available")
+        except (ImportError, Exception) as e:
+            print(f"RAPIDS cuML not available or CUDA error: {e}")
     if backend == 'parametric-umap':
         from umap.parametric_umap import ParametricUMAP
         return ParametricUMAP(n_components = common_params['n_components']), 'gpu'
