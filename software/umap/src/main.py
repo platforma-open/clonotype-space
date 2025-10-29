@@ -120,8 +120,8 @@ def create_umap_model(backend, components, neighbors, min_dist):
             if torch.cuda.is_available():
                 print("Using GPU-accelerated UMAP (RAPIDS cuML)...")
                 return cuml_umap.UMAP(**common_params, init = 'spectral', n_epochs = 2000), 'gpu'
-        except ImportError:
-            print("RAPIDS cuML not available. Using CPU-based UMAP...")
+        except (ImportError, Exception) as e:
+            print(f"RAPIDS cuML not available or CUDA error: {e}")
     if backend == 'parametric-umap':
         from umap.parametric_umap import ParametricUMAP
         return ParametricUMAP(n_components = common_params['n_components']), 'gpu'
