@@ -1,5 +1,12 @@
 # @platforma-open/milaboratories.clonotype-space.workflow
 
+## 2.11.5
+
+### Patch Changes
+
+- Updated dependencies [ecb03c9]
+  - @platforma-open/milaboratories.clonotype-space.umap@2.8.2
+
 ## 2.11.4
 
 ### Patch Changes

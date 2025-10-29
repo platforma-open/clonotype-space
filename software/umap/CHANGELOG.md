@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.umap
 
+## 2.8.2
+
+### Patch Changes
+
+- ecb03c9: Install CUDA dependencies only in Linux
+
 ## 2.8.1
 
 ### Patch Changes
