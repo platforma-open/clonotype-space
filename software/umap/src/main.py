@@ -115,13 +115,11 @@ def create_umap_model(backend, components, neighbors, min_dist):
     
     if backend == 'cuml' or (backend == 'auto'):
         try:
-            import torch
-            if torch.cuda.is_available() & torch.cuda.device_count() > 0:
-                import cuml.manifold.umap as cuml_umap
-                print("Using GPU-accelerated UMAP (RAPIDS cuML)...")
-                return cuml_umap.UMAP(**common_params, init = 'spectral', n_epochs = 2000), 'gpu'
-            else:
-                print(f"GPU not available")
+            import cuml
+            import cuml.manifold.umap as cuml_umap
+            print("Using GPU-accelerated UMAP (RAPIDS cuML)...\n")
+            return cuml_umap.UMAP(**common_params, init = 'spectral', n_epochs = 2000), 'gpu'
+          
         except (ImportError, Exception) as e:
             print(f"RAPIDS cuML not available or CUDA error: {e}")
     if backend == 'parametric-umap':
@@ -130,7 +128,7 @@ def create_umap_model(backend, components, neighbors, min_dist):
 
     # Default to CPU-based UMAP
     import umap as umap_learn
-    print("Using CPU-based UMAP (umap-learn)...")
+    print("Using CPU-based UMAP (umap-learn)...\n")
     return umap_learn.UMAP(n_jobs=-1, **common_params), 'cpu'
 
 # This is a hack to make the print statements flush to the console immediately
@@ -290,6 +288,16 @@ def main():
     end_time_load = time.time()
     print(f"Input loading and preprocessing completed in {end_time_load - start_time_load:.2f} seconds.\n")
 
+    # --- UMAP Backend Selection ---
+    umap_model = None
+    # Determine which UMAP backend to use
+    if args.umap_backend in ['cuml', 'auto', 'sklearn', 'parametric-umap']:
+        umap_model, run_type = create_umap_model(args.umap_backend, args.umap_components, 
+                                    args.umap_neighbors, args.umap_min_dist)
+    else:
+        print(f"Error: Unknown UMAP backend '{args.umap_backend}'. Exiting.")
+        sys.exit(1)
+
     # --- Start Timing: K-mer Counting ---
     start_time_kmer = time.time()
     matrix = kmer_count_vectors(sequences, k=args.k_mer_size)
@@ -320,9 +328,11 @@ def main():
     print(f"Explained variance ratio by {n_components_95} components: {sum(svd.explained_variance_ratio_):.3f}")
     end_time_svd = time.time()
     print(f"Truncated SVD completed in {end_time_svd - start_time_svd:.2f} seconds.\n")
-    
+
     # -- Subsample dataset if working with CPU --
-    if num_total_sequences < SAMPLING_THRESHOLD_1:
+    if (run_type == 'gpu'):
+        print(f"Total sequences ({num_total_sequences}). No sampling used for UMAP fitting on GPU.")
+    elif num_total_sequences < SAMPLING_THRESHOLD_1:
         print(f"Total sequences ({num_total_sequences}) < {SAMPLING_THRESHOLD_1}. No sampling for UMAP fitting.")
         sampled_data_for_fit = svd_embed # Default to full data
     else:
@@ -339,17 +349,7 @@ def main():
         sample_indices = np.random.choice(num_total_sequences, size=actual_sample_size, replace=False)
         sampled_data_for_fit = svd_embed[sample_indices]
 
-    # --- UMAP Backend Selection and Sampling Logic ---
-    umap_model = None
-    
-    # Determine which UMAP backend to use
-    if args.umap_backend in ['cuml', 'auto', 'sklearn', 'parametric-umap']:
-        umap_model, run_type = create_umap_model(args.umap_backend, args.umap_components, 
-                                    args.umap_neighbors, args.umap_min_dist)
-    else:
-        print(f"Error: Unknown UMAP backend '{args.umap_backend}'. Exiting.")
-        sys.exit(1)
-
+    # --- UMAP computation and Sampling Logic ---
     # Check if we have enough sequences for UMAP
     # UMAP requires at least n_neighbors + 1 sequences; also n_neighbors must be > 1 -> minimum 3 sequences
     # Also enough data for spectral layout is needed, you need at least 2 more samples than
