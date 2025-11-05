@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.umap
 
+## 2.8.3
+
+### Patch Changes
+
+- a680286: Fix GPU usage
+
 ## 2.8.2
 
 ### Patch Changes

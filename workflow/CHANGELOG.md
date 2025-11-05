@@ -1,5 +1,13 @@
 # @platforma-open/milaboratories.clonotype-space.workflow
 
+## 2.11.6
+
+### Patch Changes
+
+- a680286: Fix GPU usage
+- Updated dependencies [a680286]
+  - @platforma-open/milaboratories.clonotype-space.umap@2.8.3
+
 ## 2.11.5
 
 ### Patch Changes
