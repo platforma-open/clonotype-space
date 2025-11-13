@@ -1,5 +1,12 @@
 # @platforma-open/milaboratories.clonotype-space.ui
 
+## 2.5.9
+
+### Patch Changes
+
+- 9252b6a: update dependencies
+- 1d396b1: use moved PlMultiSequenceAlignment
+
 ## 2.5.8
 
 ### Patch Changes
