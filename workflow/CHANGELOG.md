@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.workflow
 
+## 2.11.7
+
+### Patch Changes
+
+- 0ccc5ba: Fix StdoutStream
+
 ## 2.11.6
 
 ### Patch Changes
