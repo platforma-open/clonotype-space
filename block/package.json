@@ -1,6 +1,6 @@
 {
   "name": "@platforma-open/milaboratories.clonotype-space",
-  "version": "2.2.27",
+  "version": "2.2.28",
   "scripts": {
     "pretty": "prettier --write \"./**/*.{js,jsx,mjs,cjs,ts,tsx,json,vue}\"",
     "build": "rm -rf ./block-pack && block-tools pack",

@@ -1,5 +1,15 @@
 # @platforma-open/milaboratories.clonotype-space
 
+## 2.2.28
+
+### Patch Changes
+
+- 38d8642: Block metadata update
+- Updated dependencies [38d8642]
+  - @platforma-open/milaboratories.clonotype-space.model@2.4.4
+  - @platforma-open/milaboratories.clonotype-space.ui@2.5.10
+  - @platforma-open/milaboratories.clonotype-space.workflow@2.11.8
+
 ## 2.2.27
 
 ### Patch Changes

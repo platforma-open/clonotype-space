@@ -1,5 +1,13 @@
 # @platforma-open/milaboratories.clonotype-space.workflow
 
+## 2.11.8
+
+### Patch Changes
+
+- 38d8642: Block metadata update
+- Updated dependencies [38d8642]
+  - @platforma-open/milaboratories.clonotype-space.umap@2.8.4
+
 ## 2.11.7
 
 ### Patch Changes

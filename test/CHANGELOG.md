@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.test
 
+## 2.0.7
+
+### Patch Changes
+
+- 38d8642: Block metadata update
+
 ## 2.0.6
 
 ### Patch Changes

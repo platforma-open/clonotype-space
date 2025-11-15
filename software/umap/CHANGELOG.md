@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.umap
 
+## 2.8.4
+
+### Patch Changes
+
+- 38d8642: Block metadata update
+
 ## 2.8.3
 
 ### Patch Changes
