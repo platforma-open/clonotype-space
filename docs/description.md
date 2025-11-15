@@ -1,9 +1,11 @@
-# Clonotype Space
+# Overview
 
-This block computes a "clonotype space" to visually represent the relationship between clonotype sequences using dimensionality reduction techniques. In adaptive immunity, clonotypes represent unique T-cell receptor (TCR) or B-cell receptor (BCR) sequences characterized by their amino acid sequences, which determine antigen specificity. The clonotype space provides an intuitive 2D visualization where similar clonotypes cluster together, enabling researchers to explore immune repertoire diversity, identify clonal expansion patterns, analyze disease biomarkers, and monitor vaccine responses.
+Computes a clonotype space to visually represent relationships between clonotype sequences using dimensionality reduction techniques, enabling intuitive exploration of immune repertoire diversity and structure. The block processes amino acid sequences from T-cell receptor (TCR) or B-cell receptor (BCR) clonotype data and generates 2D visualizations where similar clonotypes cluster together based on sequence similarity.
 
-The algorithm employs a two-stage pipeline: first, amino acid sequences are converted into k-mer count vectors, then dimensionality is reduced via truncated SVD followed by UMAP projection to 2D coordinates. This approach processes both bulk and single-cell VDJ data, concatenating multi-chain sequences when necessary, and outputs interactive visualizations with metadata overlay.
+The algorithm employs a two-stage pipeline: first, amino acid sequences are converted into k-mer count vectors that capture sequence composition patterns, then dimensionality is reduced via truncated SVD followed by UMAP projection to 2D coordinates. This approach processes both bulk and single-cell VDJ data, concatenating multi-chain sequences when necessary, and outputs interactive visualizations with metadata overlay. The k-mer-based representation enables comparison of clonotypes based on shared sequence motifs, while UMAP preserves local neighborhood structure, ensuring that clonotypes with similar sequences appear close together in the visualization.
 
-If you use this block in your research, please cite:
+The block uses UMAP for dimensionality reduction. When using this block in your research, cite the UMAP publication (McInnes et al. 2018) listed below.
 
->  McInnes, L., Healy, J., & Melville, J. (2018). UMAP: Uniform Manifold Approximation and Projection for Dimension Reduction. *arXiv:1802.03426*.
+The following publication describes the methodology used:
+
+> McInnes, L., Healy, J., Saul, N., & Großberger, L. (2018). UMAP: Uniform Manifold Approximation and Projection. _Journal of Open Source Software_ **3**, 861 (2018). [https://doi.org/10.21105/joss.00861](https://doi.org/10.21105/joss.00861)
