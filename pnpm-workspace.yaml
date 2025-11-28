@@ -9,7 +9,7 @@ packages:
 catalog:
   '@platforma-sdk/model': ^1.45.30
   '@platforma-sdk/ui-vue': ^1.45.31
-  '@platforma-sdk/workflow-tengo': ^5.6.3
+  '@platforma-sdk/workflow-tengo': ^5.6.0
   '@platforma-sdk/block-tools': ^2.6.21
   '@platforma-sdk/test': ^1.45.32
   '@platforma-sdk/tengo-builder': ^2.3.9
@@ -20,7 +20,7 @@ catalog:
   '@platforma-sdk/blocks-deps-updater': ^2.0.0
 
   '@milaboratories/software-pframes-conv': ^2.2.9
-  '@platforma-open/milaboratories.runenv-python-3': ^1.7.5
+  '@platforma-open/milaboratories.runenv-python-3': ^1.6.2
 
   '@vueuse/core': ^13.3.0
 
