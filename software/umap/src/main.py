@@ -269,58 +269,29 @@ def get_gpu_memory_info():
     return free_gb, total_gb
 
 def compute_explained_variance_cupy(singular_values, matrix_gpu, n_samples):
-    """
-    Compute explained variance ratio from CuPy SVD singular values.
+    """Compute explained variance ratio from CuPy SVD singular values.
     
-    Matches sklearn's TruncatedSVD behavior by computing total variance
-    as the sum of column-wise variances (with centering, ddof=1).
-    
-    Mathematical derivation:
-    For each feature j:
-        mean_j = (1/n) * sum_i(x_ij)
-        var_j = (1/(n-1)) * sum_i((x_ij - mean_j)^2)
-              = (1/(n-1)) * [sum_i(x_ij^2) - n * mean_j^2]
-    
-    Total variance = sum_j(var_j)
-    
-    This ensures consistency with sklearn's TruncatedSVD explained_variance_ratio_.
-    
-    Args:
-        singular_values: CuPy array of singular values (descending order)
-        matrix_gpu: CuPy sparse matrix (n_samples × n_features)
-        n_samples: Number of samples (rows)
-    
-    Returns:
-        numpy array of explained variance ratios (one per singular value)
+    Matches sklearn's TruncatedSVD behavior for sparse matrices.
+    For SVD of non-centered data X: X = U @ diag(S) @ V^T
+    - explained_variance = S^2 / (n-1)
+    - total_variance = Frobenius norm squared / (n-1) for non-centered data
     """
     import cupy as cp
-    
-    # Explained variance from singular values
-    # For SVD: X ≈ U @ diag(S) @ V^T
-    # Explained variance per component = S^2 / (n - 1)
     explained_variance = (singular_values ** 2) / (n_samples - 1)
     
-    # Compute total variance as sum of column-wise variances
-    # This matches sklearn.decomposition.TruncatedSVD behavior
+    # For TruncatedSVD on non-centered data, sklearn uses Frobenius norm
+    # Total variance = ||X||_F^2 / (n-1) where ||X||_F^2 = sum of all squared elements
+    # This is because for non-centered data, the "total variance" in TruncatedSVD context
+    # is actually the sum of squared entries divided by (n-1)
     
-    # Column means and sum of squares
-    # .A1 converts sparse matrix result (1 x n_features) to 1D array for proper broadcasting
-    mu = matrix_gpu.mean(axis=0).A1
-    sum_sq = matrix_gpu.power(2).sum(axis=0).A1
-    
-    # Column variances with ddof=1 (Bessel's correction)
-    # var(col) = (1/(n-1)) * [sum(x^2) - n * mean^2]
-    var_cols = (sum_sq - n_samples * (mu ** 2)) / (n_samples - 1)
-    
-    # Total variance across all features
-    total_variance = cp.sum(var_cols)
-    
-    # Handle edge case: zero variance (all features constant)
-    # This prevents division by zero and matches sklearn behavior
+    # For sparse matrix: compute Frobenius norm squared
+    total_sum_squares = float(matrix_gpu.power(2).sum())
+    total_variance = total_sum_squares / (n_samples - 1)
+
+    # Handle case where total_variance is zero to avoid division by zero
     if total_variance == 0:
-        return cp.asnumpy(cp.zeros_like(explained_variance))
+        return cp.zeros_like(explained_variance)
     
-    # Explained variance ratio
     return cp.asnumpy(explained_variance / total_variance)
 
 def run_cupy_sparse_svd(matrix_gpu, n_components, random_seed=42):
