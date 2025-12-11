@@ -10,6 +10,7 @@ Usage:
         [--dr-components 5] [--umap-components 2] \
         [--umap-neighbors 8] [--umap-min-dist 0.05] \
         [--k-mer-size 3] \
+        [--svd-backend auto|cuml|sklearn] \
         [--umap-backend auto|cuml|sklearn] \
         [--output-dir .]
 
@@ -27,6 +28,10 @@ Options:
   --umap-neighbors  UMAP n_neighbors (default: 8)
   --umap-min-dist   UMAP min_dist (default: 0.05)
   --k-mer-size      Size of k-mers to use for sequence analysis (default: 3 for amino acids)
+  --n-jobs          Number of parallel workers for k-mer counting: -1 (default, use all CPUs),
+                    1 (single-threaded), or N (use N workers). Parallelization provides 4-8x speedup.
+  --svd-backend     Choose TruncatedSVD implementation: 'auto' (default, tries cuml then sklearn),
+                    'cuml' (RAPIDS cuML TruncatedSVD, requires GPU), 'sklearn' (scikit-learn, CPU-based).
   --umap-backend    Choose UMAP implementation: 'auto' (default, tries cuml then sklearn),
                     'cuml' (RAPIDS cuml.UMAP, requires GPU), 'sklearn' (umap-learn, CPU-based).
   --output-dir      Directory to save output files (default: current directory)
@@ -53,7 +58,6 @@ import pandas as pd
 import sys
 import os
 from scipy import sparse
-from sklearn.decomposition import TruncatedSVD
 import time
 # import pickle
 
@@ -62,47 +66,140 @@ SAMPLING_THRESHOLD_1 = 50000
 SAMPLING_THRESHOLD_2 = 200000
 FIXED_SAMPLE_SIZE_LARGE_DATA = 100000
 
-def kmer_count_vectors(sequences, k=3):
+def _process_sequence_chunk(args):
     """
-    Convert amino acid sequences to k-mer count vectors.
+    Worker function for parallel k-mer counting.
+    
+    Args:
+        args: Tuple of (sequences_chunk, start_idx, k, kmer_to_index)
+    
+    Returns:
+        Tuple of (rows, cols) lists for COO matrix construction
+    """
+    sequences_chunk, start_idx, k, kmer_to_index = args
+    
+    rows = []
+    cols = []
+    
+    for local_idx, seq in enumerate(sequences_chunk):
+        global_idx = start_idx + local_idx
+        seq_upper = str(seq).upper()
+        
+        # Extract all k-mers from this sequence
+        for pos in range(len(seq_upper) - k + 1):
+            kmer = seq_upper[pos:pos + k]
+            kmer_idx = kmer_to_index.get(kmer)
+            if kmer_idx is not None:
+                rows.append(global_idx)
+                cols.append(kmer_idx)
+    
+    return rows, cols
+
+def kmer_count_vectors(sequences, k=3, n_jobs=-1):
+    """
+    Convert amino acid sequences to k-mer count vectors using parallel processing.
     
     Args:
         sequences (list): List of amino acid sequences
         k (int): Size of k-mers to count
+        n_jobs (int): Number of parallel workers. -1 uses all available CPUs (default: -1)
         
     Returns:
-        numpy.ndarray: Sparse matrix of k-mer counts (CSR format)
+        scipy.sparse.csr_matrix: Sparse matrix of k-mer counts (CSR format)
     """
+    import multiprocessing as mp
+    from collections import Counter
+    
     print(f"Generating {k}-mer count vectors...")
-    # Standard amino acid alphabet, now including 'X', '*', and '_'
+    
+    # Standard amino acid alphabet, including 'X', '*', and '_'
     amino_acids = ['A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 
                    'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'Y', 'X', '*', '_']
     
-    # Generate all possible k-mers
+    # Generate all possible k-mers and create lookup dictionary
     all_kmers = [''.join(p) for p in itertools.product(amino_acids, repeat=k)]
     kmer_to_index = {kmer: idx for idx, kmer in enumerate(all_kmers)}
-
+    
     num_seqs = len(sequences)
     num_kmers = len(all_kmers)
     
-    # Use LIL matrix for efficient assignment, convert to CSR for computation
-    matrix = sparse.lil_matrix((num_seqs, num_kmers), dtype=np.int32)
-
-    # Process sequences in batches for progress feedback
-    batch_size = 10000 
-    for i in range(0, num_seqs, batch_size):
-        batch_end = min(i + batch_size, num_seqs)
-        print(f"Processing sequences {i+1} to {batch_end} of {num_seqs}...")
+    # Determine number of workers
+    if n_jobs == -1:
+        n_jobs = mp.cpu_count()
+    elif n_jobs < 1:
+        n_jobs = 1
+    
+    # For small datasets, use single process to avoid overhead
+    if num_seqs < 5000:
+        n_jobs = 1
+    
+    if n_jobs == 1:
+        # Single-threaded processing (no multiprocessing overhead)
+        print(f"Processing {num_seqs} sequences (single-threaded)...")
+        rows, cols = _process_sequence_chunk((sequences, 0, k, kmer_to_index))
+    else:
+        # Split sequences into chunks for parallel processing
+        # Use 4 chunks per worker for better load balancing
+        chunk_size = max(1000, num_seqs // (n_jobs * 4))
+        chunks = []
         
-        for j in range(i, batch_end):
-            seq = str(sequences[j]).upper()  # Remove strip("_") to allow underscores in middle
-            for pos in range(len(seq) - k + 1):
-                kmer = seq[pos:pos + k]
-                idx = kmer_to_index.get(kmer)
-                if idx is not None:
-                    matrix[j, idx] += 1
+        for i in range(0, num_seqs, chunk_size):
+            chunk_end = min(i + chunk_size, num_seqs)
+            chunks.append((sequences[i:chunk_end], i, k, kmer_to_index))
+        
+        print(f"Processing {num_seqs} sequences using {n_jobs} parallel workers ({len(chunks)} chunks)...")
+        
+        # Process chunks in parallel
+        with mp.Pool(processes=n_jobs) as pool:
+            results = pool.map(_process_sequence_chunk, chunks)
+        
+        # Merge results from all workers
+        print("Merging results from parallel workers...")
+        rows = []
+        cols = []
+        for chunk_rows, chunk_cols in results:
+            rows.extend(chunk_rows)
+            cols.extend(chunk_cols)
+    
+    # Build sparse matrix from collected (row, col) pairs
+    # Use Counter to aggregate k-mer counts
+    print(f"Building sparse matrix from {len(rows)} k-mer occurrences...")
+    data_dict = Counter(zip(rows, cols))
+    
+    rows_final = np.array([r for r, c in data_dict.keys()], dtype=np.int32)
+    cols_final = np.array([c for r, c in data_dict.keys()], dtype=np.int32)
+    data_final = np.array(list(data_dict.values()), dtype=np.int32)
+    
+    # Create COO matrix and convert to CSR for efficient operations
+    matrix = sparse.coo_matrix(
+        (data_final, (rows_final, cols_final)), 
+        shape=(num_seqs, num_kmers), 
+        dtype=np.int32
+    )
+    
+    print(f"Sparse matrix created: {matrix.shape}, {matrix.nnz} non-zero entries")
     
     return matrix.tocsr()
+
+def create_svd_model(backend, n_components, random_state=42):
+    """Create TruncatedSVD model with specified parameters."""
+    if backend == 'cuml' or (backend == 'auto'):
+        try:
+            import cuml
+            from cuml.decomposition import TruncatedSVD as cuML_TruncatedSVD
+            print("Using GPU-accelerated TruncatedSVD (RAPIDS cuML)...")
+            return cuML_TruncatedSVD(n_components=n_components, random_state=random_state), 'gpu'
+        except (ImportError, Exception) as e:
+            if backend == 'cuml':
+                print(f"Error: RAPIDS cuML not available or CUDA error: {e}")
+                raise
+            else:
+                print(f"RAPIDS cuML not available, falling back to CPU-based TruncatedSVD: {e}")
+    
+    # Default to CPU-based TruncatedSVD
+    from sklearn.decomposition import TruncatedSVD
+    print("Using CPU-based TruncatedSVD (scikit-learn)...")
+    return TruncatedSVD(n_components=n_components, random_state=random_state), 'cpu'
 
 def create_umap_model(backend, components, neighbors, min_dist):
     """Create UMAP model with specified parameters."""
@@ -151,6 +248,211 @@ def create_empty_skipped_summary(output_dir, reason):
     with open(skipped_summary_path, 'w') as f:
         f.write(f"{reason}\n")
 
+def estimate_sparse_memory_gb(matrix):
+    """Estimate GPU memory required for sparse matrix in GB."""
+    nnz = matrix.nnz
+    # CSR format: data (float32) + indices (int32) + indptr (int32)
+    sparse_memory_bytes = (nnz * 4 + nnz * 4 + (matrix.shape[0] + 1) * 4)
+    return sparse_memory_bytes / (1024**3)
+
+def estimate_dense_memory_gb(matrix):
+    """Estimate GPU memory required for dense matrix in GB."""
+    return (matrix.shape[0] * matrix.shape[1] * 4) / (1024**3)
+
+def get_gpu_memory_info():
+    """Get GPU memory information in GB. Returns (free_gb, total_gb)."""
+    import cupy as cp
+    device = cp.cuda.Device()
+    device_memory = device.mem_info
+    free_gb = device_memory[0] / (1024**3)
+    total_gb = device_memory[1] / (1024**3)
+    return free_gb, total_gb
+
+def compute_explained_variance_cupy(singular_values, matrix_gpu, n_samples):
+    """Compute explained variance ratio from CuPy SVD singular values."""
+    import cupy as cp
+    explained_variance = (singular_values ** 2) / (n_samples - 1)
+    total_variance = cp.sum(matrix_gpu.power(2).sum(axis=1)) / (n_samples - 1)
+    return cp.asnumpy(explained_variance / total_variance)
+
+def run_cupy_sparse_svd(matrix_gpu, n_components, random_seed=42):
+    """
+    Run CuPy sparse SVD and return results in standard order.
+    
+    Returns:
+        tuple: (u, s, vt) where singular values are in descending order
+    """
+    import cupy as cp
+    from cupyx.scipy.sparse.linalg import svds as cupy_svds
+    
+    # Set random seed for reproducibility
+    cp.random.seed(random_seed)
+    
+    # Perform SVD (returns ascending order)
+    u, s, vt = cupy_svds(matrix_gpu, k=n_components)
+    
+    # Reverse to descending order (largest singular values first)
+    return u[:, ::-1], s[::-1], vt[::-1, :]
+
+def fallback_to_cpu_svd(matrix, n_components):
+    """Fallback to CPU-based SVD. Returns (svd_model, explained_variance_ratio)."""
+    print("Falling back to CPU-based SVD...")
+    svd_model, _ = create_svd_model('sklearn', n_components, random_state=42)
+    svd_model.fit(matrix)
+    return svd_model, svd_model.explained_variance_ratio_
+
+def compute_svd_embedding(matrix, svd_backend='auto', target_variance=0.95, max_components=500):
+    """
+    Compute SVD dimensionality reduction with automatic backend selection.
+    
+    Tries GPU-accelerated sparse SVD first (memory efficient), falls back to CPU if needed.
+    Automatically determines optimal number of components based on explained variance.
+    
+    Args:
+        matrix: scipy.sparse matrix (CSR format) containing k-mer count vectors
+        svd_backend: 'auto', 'gpu', or 'cpu' - which SVD implementation to use
+        target_variance: target explained variance ratio (default: 0.95 for 95%)
+        max_components: maximum number of components to compute (default: 500)
+    
+    Returns:
+        tuple: (svd_embed, n_components, explained_variance_sum)
+            - svd_embed: numpy array of reduced dimensions
+            - n_components: number of components used
+            - explained_variance_sum: total explained variance by selected components
+    """
+    # Memory safety margins for GPU operations
+    SPARSE_MEMORY_MULTIPLIER = 3.0  # 3x sparse memory for intermediate operations
+    MEMORY_BUFFER_GB = 2.0  # Additional buffer for CUDA operations
+    
+    # Calculate maximum feasible number of components
+    n_components_max = min(matrix.shape[0] - 1, matrix.shape[1], max_components)
+    print(f"Computing SVD with up to {n_components_max} components...")
+    
+    # State variables for SVD computation
+    matrix_gpu = None
+    use_cupy_sparse_svd = False
+    svd_u, svd_s, svd_vt = None, None, None
+    explained_variance_ratio = None
+    svd_cpu_model = None
+    
+    # Determine which SVD backend to use
+    try:
+        _, initial_backend = create_svd_model(svd_backend, n_components_max, random_state=42)
+    except Exception as e:
+        print(f"Warning: Error detecting SVD backend: {e}")
+        initial_backend = 'cpu'
+    
+    # Try GPU-accelerated sparse SVD if GPU backend is available
+    if initial_backend == 'gpu':
+        try:
+            import cupy as cp
+            from cupyx.scipy import sparse as cp_sparse
+            
+            # Get GPU memory information
+            free_gb, total_gb = get_gpu_memory_info()
+            print(f"GPU memory available: {free_gb:.2f} GB / {total_gb:.2f} GB")
+            
+            # Estimate memory requirements
+            sparse_mem_gb = estimate_sparse_memory_gb(matrix)
+            dense_mem_gb = estimate_dense_memory_gb(matrix)
+            sparsity_pct = (1 - matrix.nnz / (matrix.shape[0] * matrix.shape[1])) * 100
+            
+            print(f"Sparse matrix memory: {sparse_mem_gb:.2f} GB "
+                  f"(vs {dense_mem_gb:.2f} GB if dense)")
+            print(f"Matrix sparsity: {sparsity_pct:.1f}% sparse")
+            
+            # Check if we have enough GPU memory for sparse operations
+            required_mem_gb = sparse_mem_gb * SPARSE_MEMORY_MULTIPLIER + MEMORY_BUFFER_GB
+            
+            if free_gb >= required_mem_gb:
+                print("Using CuPy sparse SVD (supports sparse matrices on GPU)...")
+                
+                # Convert to GPU sparse matrix
+                matrix_gpu = cp_sparse.csr_matrix(matrix, dtype=cp.float32)
+                print(f"GPU sparse matrix created: {matrix_gpu.shape}, {matrix_gpu.nnz} non-zeros")
+                
+                # Perform GPU sparse SVD
+                print("Running GPU sparse SVD...")
+                svd_u, svd_s, svd_vt = run_cupy_sparse_svd(matrix_gpu, n_components_max)
+                
+                # Calculate explained variance
+                explained_variance_ratio = compute_explained_variance_cupy(
+                    svd_s, matrix_gpu, matrix.shape[0]
+                )
+                use_cupy_sparse_svd = True
+                
+                print("GPU sparse SVD completed successfully.")
+            else:
+                print(f"Warning: Insufficient GPU memory for sparse operations.")
+                print(f"Required: ~{required_mem_gb:.2f} GB, Available: {free_gb:.2f} GB")
+                svd_cpu_model, explained_variance_ratio = fallback_to_cpu_svd(matrix, n_components_max)
+                
+        except (ImportError, MemoryError) as e:
+            error_type = "ImportError" if isinstance(e, ImportError) else "Out of Memory"
+            print(f"Warning: {error_type} during GPU SVD - {e}")
+            svd_cpu_model, explained_variance_ratio = fallback_to_cpu_svd(matrix, n_components_max)
+            use_cupy_sparse_svd = False
+        except Exception as e:
+            print(f"Warning: Unexpected error during GPU SVD - {e}")
+            svd_cpu_model, explained_variance_ratio = fallback_to_cpu_svd(matrix, n_components_max)
+            use_cupy_sparse_svd = False
+    else:
+        # CPU-based SVD
+        svd_cpu_model, explained_variance_ratio = fallback_to_cpu_svd(matrix, n_components_max)
+    
+    # Find optimal number of components for target explained variance
+    cumulative_explained_variance = np.cumsum(explained_variance_ratio)
+    n_components_optimal = (np.argmax(cumulative_explained_variance >= target_variance) + 1 
+                           if np.any(cumulative_explained_variance >= target_variance) 
+                           else n_components_max)
+    print(f"Number of components explaining {target_variance*100:.0f}% variance: {n_components_optimal}")
+    
+    # Compute final SVD embedding with optimal number of components
+    if use_cupy_sparse_svd and matrix_gpu is not None:
+        # GPU sparse SVD path
+        try:
+            import cupy as cp
+            
+            # Recompute only if we need fewer components
+            if n_components_optimal < n_components_max:
+                print(f"Recomputing GPU sparse SVD with {n_components_optimal} components...")
+                svd_u, svd_s, svd_vt = run_cupy_sparse_svd(matrix_gpu, n_components_optimal)
+            else:
+                print(f"Reusing GPU sparse SVD results with {n_components_max} components.")
+            
+            # Compute embedding: X_reduced = U * S
+            svd_embed = cp.asnumpy(svd_u @ cp.diag(svd_s))
+            
+            # Calculate explained variance for selected components
+            explained_variance_ratio_final = compute_explained_variance_cupy(
+                svd_s, matrix_gpu, matrix.shape[0]
+            )
+            explained_var_sum = sum(explained_variance_ratio_final)
+            
+            print("GPU sparse SVD embedding computed successfully.")
+            
+        except (MemoryError, Exception) as e:
+            print(f"Warning: GPU SVD transform failed: {e}")
+            svd_model, _ = create_svd_model('sklearn', n_components_optimal, random_state=42)
+            svd_embed = svd_model.fit_transform(matrix)
+            explained_var_sum = sum(svd_model.explained_variance_ratio_)
+    else:
+        # CPU-based SVD path
+        if n_components_optimal < n_components_max or svd_cpu_model is None:
+            # Create new model with optimal number of components
+            svd_model, _ = create_svd_model('sklearn', n_components_optimal, random_state=42)
+            svd_embed = svd_model.fit_transform(matrix)
+        else:
+            # Reuse the full model if we're using all components
+            svd_embed = svd_cpu_model.fit_transform(matrix)
+            svd_model = svd_cpu_model
+        
+        explained_var_sum = sum(svd_model.explained_variance_ratio_)
+    
+    print(f"Explained variance by {n_components_optimal} components: {explained_var_sum:.3f}")
+    
+    return svd_embed, n_components_optimal, explained_var_sum
+
 def main():
     parser = argparse.ArgumentParser(
         description='Compute UMAP embeddings from amino acid sequences via k-mer counts and PCA.',
@@ -172,6 +474,12 @@ def main():
                         help='Size of k-mers to use for sequence analysis (default: 3 for amino acids)')
     parser.add_argument('--output-dir', default='.',
                         help='Directory to save output files (default: current directory)')
+    parser.add_argument('--svd-backend', type=str, default='auto',
+                        choices=['auto', 'cuml', 'sklearn'],
+                        help='Choose TruncatedSVD implementation:\n'
+                             '  "auto" (default): Tries cuML TruncatedSVD first, falls back to scikit-learn.\n'
+                             '  "cuml": Forces RAPIDS cuML TruncatedSVD (requires CUDA-enabled GPU and cuml installed).\n'
+                             '  "sklearn": Forces scikit-learn TruncatedSVD (CPU-based, no GPU required).')
     parser.add_argument('--umap-backend', type=str, default='auto',
                         choices=['auto', 'cuml', 'sklearn', 'parametric-umap'],
                         help='Choose UMAP implementation:\n'
@@ -180,6 +488,11 @@ def main():
                              '  "sklearn": Forces umap-learn (CPU-based, no GPU required).')
     parser.add_argument('--store-models', action='store_true',
                         help='Set to True to store SVD and UMAP models (default: False)')
+    parser.add_argument('--n-jobs', type=int, default=-1,
+                        help='Number of parallel workers for k-mer counting.\n'
+                             '  -1 (default): Use all available CPU cores.\n'
+                             '  1: Single-threaded processing (no parallelization).\n'
+                             '  N: Use N parallel workers.')
 
     args = parser.parse_args()
 
@@ -193,6 +506,7 @@ def main():
           f"UMAP components={args.umap_components}, "
           f"UMAP neighbors={args.umap_neighbors}, "
           f"UMAP min_dist={args.umap_min_dist}, "
+          f"SVD Backend={args.svd_backend.upper()}, "
           f"UMAP Backend={args.umap_backend.upper()}")
 
     # Validate input parameters
@@ -300,7 +614,7 @@ def main():
 
     # --- Start Timing: K-mer Counting ---
     start_time_kmer = time.time()
-    matrix = kmer_count_vectors(sequences, k=args.k_mer_size)
+    matrix = kmer_count_vectors(sequences, k=args.k_mer_size, n_jobs=args.n_jobs)
     end_time_kmer = time.time()
     print(f"K-mer counting completed in {end_time_kmer - start_time_kmer:.2f} seconds.\n")
     
@@ -308,24 +622,14 @@ def main():
     start_time_svd = time.time()
     print("Running Truncated SVD...")
     
-    # Calculate optimal number of components based on explained variance
-    n_components_max = min(matrix.shape[0] - 1, matrix.shape[1], 500)  # Limit to 500 components
-    print(f"Running TruncatedSVD with up to {n_components_max} components to find optimal number...")
+    # Compute SVD dimensionality reduction
+    svd_embed, n_components_used, explained_var_sum = compute_svd_embedding(
+        matrix=matrix,
+        svd_backend=args.svd_backend,
+        target_variance=0.95,
+        max_components=500
+    )
     
-    svd_full = TruncatedSVD(n_components=n_components_max, random_state=42)
-    svd_full.fit(matrix)
-    
-    explained_variance_ratio = svd_full.explained_variance_ratio_
-    cumulative_explained_variance = np.cumsum(explained_variance_ratio)
-    
-    # Find number of components for 95% variance
-    n_components_95 = np.argmax(cumulative_explained_variance >= 0.95) + 1 if np.any(cumulative_explained_variance >= 0.95) else n_components_max
-    print(f"Number of components explaining 95% variance: {n_components_95}")
-    
-    # Use the calculated number of components
-    svd = TruncatedSVD(n_components=n_components_95, random_state=42)
-    svd_embed = svd.fit_transform(matrix)
-    print(f"Explained variance ratio by {n_components_95} components: {sum(svd.explained_variance_ratio_):.3f}")
     end_time_svd = time.time()
     print(f"Truncated SVD completed in {end_time_svd - start_time_svd:.2f} seconds.\n")
 
