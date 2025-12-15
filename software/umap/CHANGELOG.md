@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.umap
 
+## 2.8.5
+
+### Patch Changes
+
+- 86cdd7d: Improve UMAP performance by using parallelization for kmer generation and gpu for svd
+
 ## 2.8.4
 
 ### Patch Changes
