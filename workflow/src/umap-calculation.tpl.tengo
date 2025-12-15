@@ -18,12 +18,13 @@ self.body(func(args) {
     umapClones := exec.builder().
         software(assets.importSoftware("@platforma-open/milaboratories.clonotype-space.umap:main")).
         mem(string(mem) + "GiB").
-        cpu(1).
+        cpu(cpu).
         addFile("sequences.tsv", umapTable).
         arg("-i").arg("sequences.tsv").
         arg("-u").arg("umap.tsv").
         arg("--umap-neighbors").arg(string(umap_neighbors)).
         arg("--umap-min-dist").arg(string(umap_min_dist)).
+        arg("--n-jobs").arg(string(cpu)).
         saveFile("umap.tsv").
         saveFile("skipped_clonotypes_summary.txt").
         saveStdoutStream().
