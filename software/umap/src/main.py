@@ -107,8 +107,10 @@ def kmer_count_vectors(sequences, k=3, n_jobs=-1):
     Returns:
         scipy.sparse.csr_matrix: Sparse matrix of k-mer counts (CSR format)
     """
+    from concurrent.futures import ProcessPoolExecutor
     from multiprocessing import get_context
     from collections import Counter
+    import os
     
     print(f"Generating {k}-mer count vectors...")
     
@@ -128,7 +130,7 @@ def kmer_count_vectors(sequences, k=3, n_jobs=-1):
     
     # Determine number of workers
     if n_jobs == -1:
-        n_jobs = mp_context.cpu_count()
+        n_jobs = os.cpu_count()
     elif n_jobs < 1:
         n_jobs = 1
     
@@ -152,13 +154,10 @@ def kmer_count_vectors(sequences, k=3, n_jobs=-1):
         
         print(f"Processing {num_seqs} sequences using {n_jobs} parallel workers ({len(chunks)} chunks)...")
         
-        # Process chunks in parallel using spawn context to avoid fork issues
-        pool = mp_context.Pool(processes=n_jobs)
-        try:
-            results = pool.map(_process_sequence_chunk, chunks)
-        finally:
-            pool.close()
-            pool.join()
+        # Process chunks in parallel using ProcessPoolExecutor with spawn context
+        # Context manager ensures proper shutdown and cleanup
+        with ProcessPoolExecutor(max_workers=n_jobs, mp_context=mp_context) as executor:
+            results = list(executor.map(_process_sequence_chunk, chunks))
         
         # Merge results from all workers
         print("Merging results from parallel workers...")
