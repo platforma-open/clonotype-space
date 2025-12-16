@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.umap
 
+## 2.9.0
+
+### Minor Changes
+
+- 8f155eb: Fix possible hanging of python script
+
 ## 2.8.5
 
 ### Patch Changes
