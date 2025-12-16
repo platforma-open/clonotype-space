@@ -107,8 +107,10 @@ def kmer_count_vectors(sequences, k=3, n_jobs=-1):
     Returns:
         scipy.sparse.csr_matrix: Sparse matrix of k-mer counts (CSR format)
     """
-    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+    from multiprocessing import get_context
     from collections import Counter
+    import os
     
     print(f"Generating {k}-mer count vectors...")
     
@@ -123,9 +125,12 @@ def kmer_count_vectors(sequences, k=3, n_jobs=-1):
     num_seqs = len(sequences)
     num_kmers = len(all_kmers)
     
+    # Use spawn context to avoid fork issues on macOS and with GPU libraries
+    mp_context = get_context("spawn")
+    
     # Determine number of workers
     if n_jobs == -1:
-        n_jobs = mp.cpu_count()
+        n_jobs = os.cpu_count()
     elif n_jobs < 1:
         n_jobs = 1
     
@@ -149,9 +154,10 @@ def kmer_count_vectors(sequences, k=3, n_jobs=-1):
         
         print(f"Processing {num_seqs} sequences using {n_jobs} parallel workers ({len(chunks)} chunks)...")
         
-        # Process chunks in parallel
-        with mp.Pool(processes=n_jobs) as pool:
-            results = pool.map(_process_sequence_chunk, chunks)
+        # Process chunks in parallel using ProcessPoolExecutor with spawn context
+        # Context manager ensures proper shutdown and cleanup
+        with ProcessPoolExecutor(max_workers=n_jobs, mp_context=mp_context) as executor:
+            results = list(executor.map(_process_sequence_chunk, chunks))
         
         # Merge results from all workers
         print("Merging results from parallel workers...")
@@ -754,7 +760,6 @@ def main():
     
     total_run_time = end_time_save - start_time_load # Total time from start of loading to end of saving
     print(f"\nTotal analysis completed in {total_run_time:.2f} seconds.")
-    time.sleep(1)
 
     if args.store_models:
         # with open(f"{args.output_dir}/svd_model.pickle", "wb") as f:
