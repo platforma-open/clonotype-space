@@ -11,8 +11,15 @@ self.body(func(args) {
     umapTable := args.umapTable
     umap_neighbors := args.umap_neighbors
     umap_min_dist := args.umap_min_dist
+    alphabet := args.alphabet
     mem := args.mem
     cpu := args.cpu
+
+    // Calculate k-mer size based on alphabet
+    kmerSize := 3 // default for aminoacid
+    if alphabet == "nucleotide" {
+        kmerSize = 6
+    }
 
     // UMAP software execution
     umapClones := exec.builder().
@@ -24,6 +31,8 @@ self.body(func(args) {
         arg("-u").arg("umap.tsv").
         arg("--umap-neighbors").arg(string(umap_neighbors)).
         arg("--umap-min-dist").arg(string(umap_min_dist)).
+        arg("--alphabet").arg(alphabet).
+        arg("--k-mer-size").arg(string(kmerSize)).
         arg("--n-jobs").arg(string(cpu)).
         saveFile("umap.tsv").
         saveFile("skipped_clonotypes_summary.txt").

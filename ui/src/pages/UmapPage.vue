@@ -9,7 +9,7 @@ import {
 } from '@platforma-sdk/model';
 
 import '@milaboratories/graph-maker/styles';
-import { PlAccordionSection, PlAlert, PlBlockPage, PlBtnGhost, PlDropdownRef, PlLogView, PlMaskIcon24, PlNumberField, PlSlideModal } from '@platforma-sdk/ui-vue';
+import { PlAccordionSection, PlAlert, PlBlockPage, PlBtnGhost, PlDropdown, PlDropdownRef, PlLogView, PlMaskIcon24, PlNumberField, PlSlideModal } from '@platforma-sdk/ui-vue';
 import { PlMultiSequenceAlignment } from '@milaboratories/multi-sequence-alignment';
 import { useApp } from '../app';
 
@@ -25,6 +25,8 @@ const app = useApp();
 
 function setAnchorColumn(ref: PlRef | undefined) {
   app.model.args.inputAnchor = ref;
+  // Reset sequence feature selection when dataset changes
+  app.model.args.sequenceFeatureRef = undefined;
   app.model.ui.title = 'Clonotype Space - ' + (ref
     ? app.model.outputs.inputOptions?.find((o) =>
       plRefsEqual(o.ref, ref),
@@ -70,6 +72,23 @@ const selection = ref<PlSelectionModel>({
 
 const multipleSequenceAlignmentOpen = ref(false);
 const umapLogOpen = ref(false);
+
+// Auto-select main protein sequence by default
+// Watch both inputAnchor and sequenceOptions to handle timing issues
+watch(
+  () => [app.model.args.inputAnchor, app.model.outputs.sequenceOptions] as const,
+  ([anchor, options]) => {
+    // Only auto-select if:
+    // 1. We have an anchor (dataset selected)
+    // 2. We have options available
+    // 3. No selection has been made yet
+    if (anchor && options && options.length > 0 && !app.model.args.sequenceFeatureRef) {
+      // Select the first option (main protein sequence due to sorting in model)
+      app.model.args.sequenceFeatureRef = options[0].value;
+    }
+  },
+  { immediate: true },
+);
 
 // Auto-close settings panel when block starts running
 watch(
@@ -119,6 +138,18 @@ watch(
         />
 
         <PlAccordionSection label="UMAP Parameters" :style="{ width: '320px' }">
+          <PlDropdown
+            v-model="app.model.args.sequenceFeatureRef"
+            :options="app.model.outputs.sequenceOptions"
+            label="Sequence feature"
+            required
+            :style="{ width: '320px' }"
+          >
+            <template #tooltip>
+              Select which sequence feature to use for UMAP calculation. Different features (CDR3, VDJRegion, etc.) may reveal different clustering patterns.
+            </template>
+          </PlDropdown>
+
           <div :style="{ display: 'flex', gap: '8px', width: '320px' }">
             <PlNumberField
               v-model="app.model.args.umap_neighbors"
