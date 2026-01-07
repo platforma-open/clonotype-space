@@ -590,7 +590,8 @@ def main():
         sys.exit(1)
 
     seq_col = "combined_sequence"
-    df_input[seq_col] = df_input[seq_col_list].agg(''.join, axis=1)
+    # Fill NaN values with empty string and convert to string type before concatenating
+    df_input[seq_col] = df_input[seq_col_list].fillna('').astype(str).agg(''.join, axis=1)
     
     initial_seq_count = len(df_input)
     df_input = df_input[df_input[seq_col].notna() & (df_input[seq_col].str.strip('_').str.len() > 0)]
@@ -604,17 +605,22 @@ def main():
         print('Error: No valid sequences found after filtering. Exiting.')
         sys.exit(1)
     
-    valid_aas = {'A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 
-                 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'Y', '*', 'X', '_'} 
+    # Define valid characters based on alphabet type
+    if args.alphabet == 'aminoacid':
+        valid_chars = {'A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L',
+                       'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'Y', '*', 'X', '_'}
+    else:  # nucleotide
+        valid_chars = {'A', 'C', 'G', 'T', 'N', '_'}
     
     invalid_seq_indices = []
     for i, seq in enumerate(sequences):
         clean_seq = str(seq).upper()  # Keep underscores in middle, allow them as valid characters
-        if not all(aa in valid_aas for aa in clean_seq):
+        if not all(char in valid_chars for char in clean_seq):
             invalid_seq_indices.append(i)
     
     if invalid_seq_indices:
-        print(f"Warning: Found {len(invalid_seq_indices)} sequences with invalid amino acid characters. These sequences will be skipped.")
+        seq_type_name = "amino acid" if args.alphabet == 'aminoacid' else "nucleotide"
+        print(f"Warning: Found {len(invalid_seq_indices)} sequences with invalid {seq_type_name} characters. These sequences will be skipped.")
         print(f"Example invalid sequence (first 5): {[sequences[i] for i in invalid_seq_indices[:5]]}")
         
         # Create list of valid sequences and their indices

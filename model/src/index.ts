@@ -19,7 +19,8 @@ import {
 
 export type BlockArgs = {
   inputAnchor?: PlRef;
-  sequenceFeatureRef?: SUniversalPColumnId;
+  sequencesRef: SUniversalPColumnId[];
+  sequenceType: 'aminoacid' | 'nucleotide';
   umap_neighbors: number;
   umap_min_dist: number;
   cpu: number;
@@ -65,6 +66,8 @@ function getColumns(ctx: RenderCtx<BlockArgs, UiState>): Columns | undefined {
 export const model = BlockModel.create()
 
   .withArgs<BlockArgs>({
+    sequenceType: 'aminoacid',
+    sequencesRef: [],
     umap_neighbors: 15,
     umap_min_dist: 0.5,
     mem: 64,
@@ -88,7 +91,7 @@ export const model = BlockModel.create()
 
   .argsValid((ctx) =>
     ctx.args.inputAnchor !== undefined
-    && ctx.args.sequenceFeatureRef !== undefined
+    && ctx.args.sequencesRef.length > 0
     && ctx.args.umap_neighbors !== undefined
     && ctx.args.umap_min_dist !== undefined
     && ctx.args.mem !== undefined
@@ -120,7 +123,7 @@ export const model = BlockModel.create()
     const sequenceMatchers = [];
 
     if (isSingleCell) {
-      // Single-cell: get per-chain sequences
+      // Single-cell: get per-chain sequences (all types)
       sequenceMatchers.push({
         axes: [{ anchor: 'main', idx: 1 }],
         name: 'pl7.app/vdj/sequence',
@@ -129,7 +132,7 @@ export const model = BlockModel.create()
         },
       });
     } else {
-      // Bulk: get regular sequences
+      // Bulk: get regular sequences (all types)
       sequenceMatchers.push({
         axes: [{ anchor: 'main', idx: 1 }],
         name: 'pl7.app/vdj/sequence',
@@ -148,42 +151,29 @@ export const model = BlockModel.create()
 
     if (!options) return undefined;
 
-    // Sort options to prioritize main protein sequences first
-    // Priority: 1) Main aminoacid sequences, 2) Other aminoacid sequences, 3) Main nucleotide, 4) Other nucleotide
-    const sortedOptions = [...options].sort((a, b) => {
-      // Parse the universal column IDs to get the column specs
-      const aColId = JSON.parse(a.value) as never;
-      const bColId = JSON.parse(b.value) as never;
+    // Pre-compute all necessary fields for UI filtering and sorting
+    const optionsWithMetadata = options.map((option) => {
+      const colId = JSON.parse(option.value) as never;
+      const columns = ctx.resultPool.getAnchoredPColumns({ main: ref }, [colId]);
+      const spec = columns?.[0]?.spec;
+      const alphabet = spec?.domain?.['pl7.app/alphabet'] as 'aminoacid' | 'nucleotide' | undefined;
+      const isMain = spec?.annotations?.['pl7.app/vdj/isMainSequence'] === 'true';
 
-      const aColumns = ctx.resultPool.getAnchoredPColumns({ main: ref }, [aColId]);
-      const bColumns = ctx.resultPool.getAnchoredPColumns({ main: ref }, [bColId]);
-
-      if (!aColumns || aColumns.length === 0 || !bColumns || bColumns.length === 0) return 0;
-
-      const aSpec = aColumns[0].spec;
-      const bSpec = bColumns[0].spec;
-
-      const aIsMain = aSpec.annotations?.['pl7.app/vdj/isMainSequence'] === 'true';
-      const bIsMain = bSpec.annotations?.['pl7.app/vdj/isMainSequence'] === 'true';
-      const aIsAA = aSpec.domain?.['pl7.app/alphabet'] === 'aminoacid';
-      const bIsAA = bSpec.domain?.['pl7.app/alphabet'] === 'aminoacid';
-
-      // Main AA sequences first
-      if (aIsMain && aIsAA && !(bIsMain && bIsAA)) return -1;
-      if (bIsMain && bIsAA && !(aIsMain && aIsAA)) return 1;
-
-      // Then other AA sequences
-      if (aIsAA && !bIsAA) return -1;
-      if (bIsAA && !aIsAA) return 1;
-
-      // Then main NT sequences
-      if (aIsMain && !bIsMain) return -1;
-      if (bIsMain && !aIsMain) return 1;
-
-      return 0;
+      return {
+        label: option.label,
+        value: option.value,
+        alphabet,
+        isMain,
+      };
     });
 
-    return sortedOptions;
+    // Sort: main sequences first, then alphabetically
+    return optionsWithMetadata.sort((a, b) => {
+      // Main sequences first
+      if (a.isMain && !b.isMain) return -1;
+      if (b.isMain && !a.isMain) return 1;
+      return 0;
+    });
   })
 
   .output('msaPf', (ctx) => {

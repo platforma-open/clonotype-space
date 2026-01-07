@@ -9,20 +9,23 @@ xsv := import("@platforma-sdk/workflow-tengo:pframes.xsv")
 pframes := import("@platforma-sdk/workflow-tengo:pframes")
 
 slices := import("@platforma-sdk/workflow-tengo:slices")
+text := import("text")
 umapConv := import(":pf-umap-conv")
 
 pSpec := import("@platforma-sdk/workflow-tengo:pframes.spec")
 umapCalculationTpl := assets.importTemplate(":umap-calculation")
 
 wf.prepare(func(args){
-	// We need a table with clonotype id and selected sequence column
+	// We need a table with clonotype id and selected sequence columns
 
 	bundleBuilder := wf.createPBundleBuilder()
 	bundleBuilder.ignoreMissingDomains() // to make query work for both bulk and single cell data
 	bundleBuilder.addAnchor("main", args.inputAnchor)
 
-	// Add user-selected sequence feature
-	bundleBuilder.addSingle(args.sequenceFeatureRef)
+	// Add user-selected sequence features
+	for ref in args.sequencesRef {
+		bundleBuilder.addSingle(ref)
+	}
 
 	return {
 		columns: bundleBuilder.build()
@@ -43,25 +46,28 @@ wf.body(func(args) {
 		ll.panic("umap_neighbors or umap_min_dist is undefined")
 	}
 
-	// Get the selected sequence column
-	selectedSeq := columns.getColumn(args.sequenceFeatureRef)
-	selectedSeqSpec := selectedSeq.spec
+	// Get alphabet from args (all selected sequences must have same alphabet)
+	alphabet := args.sequenceType
 
-	// Extract alphabet from the sequence spec
-	alphabet := selectedSeqSpec.domain["pl7.app/alphabet"]
-	if is_undefined(alphabet) {
-		ll.panic("Selected sequence does not have alphabet defined in domain")
-	}
+	// Needed conditional variables
+	isSingleCell := datasetSpec.axesSpec[1].name == "pl7.app/vdj/scClonotypeKey"
 
 	// output containers
 	outputs := {}
 
 	////////// UMAP //////////
-	// Generate input TSV with Clonotype ID and sequence
+	// Generate input TSV with Clonotype ID and sequences
 	umapTable := pframes.tsvFileBuilder()
 	umapTable.mem("8GB") // TODO: make this dynamic on input size
 	umapTable.setAxisHeader(datasetSpec.axesSpec[1].name, "clonotypeKey")
-	umapTable.add(selectedSeq, {header: "sequence"})
+
+	// Add all selected sequences with unique headers
+	for nr, seqRef in args.sequencesRef {
+		seq := columns.getColumn(seqRef)
+		// Use sequence number to ensure uniqueness
+		umapTable.add(seq, {header: "sequence_" + string(nr)})
+	}
+
 	umapTable.mem("16GiB")
 	umapTable.cpu(1)
 	umapTable = umapTable.build()
@@ -98,20 +104,27 @@ wf.body(func(args) {
 	neighborsStr := string(umap_neighbors)
 	minDistStr := string(umap_min_dist)
 
-	// Extract sequence feature label
-	seqLabel := selectedSeqSpec.annotations["pl7.app/label"]
-	if is_undefined(seqLabel) {
-		// Fallback to feature name if label not available
-		feature := selectedSeqSpec.domain["pl7.app/vdj/feature"]
-		if !is_undefined(feature) {
-			alphabetSuffix := alphabet == "aminoacid" ? " aa" : " nt"
-			seqLabel = string(feature) + alphabetSuffix
-		} else {
-			seqLabel = "sequence"
+	// Build sequence labels list
+	seqLabels := []
+	for seqRef in args.sequencesRef {
+		seqSpec := columns.getSpec(seqRef)
+		seqLabel := seqSpec.annotations["pl7.app/label"]
+		if is_undefined(seqLabel) {
+			// Fallback to feature name if label not available
+			feature := seqSpec.domain["pl7.app/vdj/feature"]
+			if !is_undefined(feature) {
+				alphabetSuffix := alphabet == "aminoacid" ? " aa" : " nt"
+				seqLabel = string(feature) + alphabetSuffix
+			} else {
+				seqLabel = "sequence"
+			}
 		}
+		seqLabels = append(seqLabels, seqLabel)
 	}
+	seqLabels = slices.quickSort(seqLabels)
+	seqLabelsStr := text.join(seqLabels, "+")
 
-	traceLabel := "UMAP (seq:" + seqLabel + ", neighbors:" + neighborsStr + ", min_dist:" + minDistStr + ")"
+	traceLabel := "UMAP (seq:" + seqLabelsStr + ", neighbors:" + neighborsStr + ", min_dist:" + minDistStr + ")"
 	
 	// Make trace
 	trace := pSpec.makeTrace(datasetSpec,

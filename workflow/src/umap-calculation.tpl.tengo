@@ -22,12 +22,15 @@ self.body(func(args) {
     }
 
     // UMAP software execution
+    // Note: --seq-col-start "sequence" will match all columns starting with "sequence"
+    // (sequence.TRA, sequence.TRB, sequence_0, etc.)
     umapClones := exec.builder().
         software(assets.importSoftware("@platforma-open/milaboratories.clonotype-space.umap:main")).
         mem(string(mem) + "GiB").
         cpu(cpu).
         addFile("sequences.tsv", umapTable).
         arg("-i").arg("sequences.tsv").
+        arg("-c").arg("sequence").
         arg("-u").arg("umap.tsv").
         arg("--umap-neighbors").arg(string(umap_neighbors)).
         arg("--umap-min-dist").arg(string(umap_min_dist)).

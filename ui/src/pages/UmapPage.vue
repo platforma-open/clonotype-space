@@ -9,7 +9,8 @@ import {
 } from '@platforma-sdk/model';
 
 import '@milaboratories/graph-maker/styles';
-import { PlAccordionSection, PlAlert, PlBlockPage, PlBtnGhost, PlDropdown, PlDropdownRef, PlLogView, PlMaskIcon24, PlNumberField, PlSlideModal } from '@platforma-sdk/ui-vue';
+import { PlAccordionSection, PlAlert, PlBlockPage, PlBtnGhost, PlBtnGroup, PlDropdownMulti, PlDropdownRef, PlLogView, PlMaskIcon24, PlNumberField, PlSlideModal } from '@platforma-sdk/ui-vue';
+import { listToOptions } from '@platforma-sdk/ui-vue';
 import { PlMultiSequenceAlignment } from '@milaboratories/multi-sequence-alignment';
 import { useApp } from '../app';
 
@@ -23,10 +24,22 @@ import { isSequenceColumn } from '../util';
 
 const app = useApp();
 
+const sequenceType = listToOptions(['aminoacid', 'nucleotide']);
+
+// Filter sequence options by selected sequence type
+const filteredSequenceOptions = computed(() => {
+  const allOptions = app.model.outputs.sequenceOptions;
+  if (!allOptions) return undefined;
+
+  const selectedType = app.model.args.sequenceType;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return allOptions.filter((option: any) => option.alphabet === selectedType);
+});
+
 function setAnchorColumn(ref: PlRef | undefined) {
   app.model.args.inputAnchor = ref;
-  // Reset sequence feature selection when dataset changes
-  app.model.args.sequenceFeatureRef = undefined;
+  // Reset sequence selection when dataset changes
+  app.model.args.sequencesRef = [];
   app.model.ui.title = 'Clonotype Space - ' + (ref
     ? app.model.outputs.inputOptions?.find((o) =>
       plRefsEqual(o.ref, ref),
@@ -73,18 +86,43 @@ const selection = ref<PlSelectionModel>({
 const multipleSequenceAlignmentOpen = ref(false);
 const umapLogOpen = ref(false);
 
-// Auto-select main protein sequence by default
-// Watch both inputAnchor and sequenceOptions to handle timing issues
+// Clear selected sequences when sequence type changes
 watch(
-  () => [app.model.args.inputAnchor, app.model.outputs.sequenceOptions] as const,
-  ([anchor, options]) => {
-    // Only auto-select if:
-    // 1. We have an anchor (dataset selected)
-    // 2. We have options available
-    // 3. No selection has been made yet
-    if (anchor && options && options.length > 0 && !app.model.args.sequenceFeatureRef) {
-      // Select the first option (main protein sequence due to sorting in model)
-      app.model.args.sequenceFeatureRef = options[0].value;
+  () => app.model.args.sequenceType,
+  () => {
+    // Reset selection when sequence type changes
+    app.model.args.sequencesRef = [];
+  },
+);
+
+// Validate and auto-select sequences when options change
+watch(
+  () => [app.model.args.inputAnchor, app.model.outputs.sequenceOptions, filteredSequenceOptions.value] as const,
+  ([anchor, allOptions, filteredOptions]) => {
+    if (!anchor || !allOptions || !filteredOptions || filteredOptions.length === 0) {
+      return;
+    }
+
+    // Create a set of valid option values for fast lookup
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const validValues = new Set(filteredOptions.map((option: any) => option.value));
+
+    // Check if current selection contains invalid values (from previous dataset)
+    const currentSelection = app.model.args.sequencesRef;
+    const hasInvalidValues = currentSelection.some((value: string) => !validValues.has(value));
+
+    // Clear selection if it contains invalid values or if it's empty
+    if (hasInvalidValues || currentSelection.length === 0) {
+      // Auto-select ALL main sequences (e.g., for single-cell datasets with multiple primary chains)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const mainSequences = filteredOptions.filter((option: any) => option.isMain);
+      if (mainSequences.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        app.model.args.sequencesRef = mainSequences.map((option: any) => option.value);
+      } else {
+        // Fallback: if no main sequences found, select the first option
+        app.model.args.sequencesRef = [filteredOptions[0].value];
+      }
     }
   },
   { immediate: true },
@@ -138,17 +176,18 @@ watch(
         />
 
         <PlAccordionSection label="UMAP Parameters" :style="{ width: '320px' }">
-          <PlDropdown
-            v-model="app.model.args.sequenceFeatureRef"
-            :options="app.model.outputs.sequenceOptions"
-            label="Sequence feature"
+          <PlBtnGroup
+            v-model="app.model.args.sequenceType"
+            label="Sequence type"
+            :options="sequenceType"
+            :compact="true"
+          />
+          <PlDropdownMulti
+            v-model="app.model.args.sequencesRef"
+            :options="filteredSequenceOptions"
+            label="Select sequence column/s for UMAP"
             required
-            :style="{ width: '320px' }"
-          >
-            <template #tooltip>
-              Select which sequence feature to use for UMAP calculation. Different features (CDR3, VDJRegion, etc.) may reveal different clustering patterns.
-            </template>
-          </PlDropdown>
+          />
 
           <div :style="{ display: 'flex', gap: '8px', width: '320px' }">
             <PlNumberField
