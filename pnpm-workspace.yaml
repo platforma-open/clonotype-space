@@ -17,9 +17,9 @@ catalog:
   '@platforma-sdk/package-builder': 3.10.7
   '@platforma-sdk/block-tools': 2.6.29
   '@platforma-sdk/eslint-config': 1.2.0
-  '@platforma-sdk/test': 1.50.0
+  '@platforma-sdk/test': 1.51.1
   '@milaboratories/helpers': 1.13.0
-  '@milaboratories/graph-maker': 1.1.200
+  '@milaboratories/graph-maker': 1.1.201
   '@milaboratories/multi-sequence-alignment': 1.45.7
 
   '@milaboratories/software-pframes-conv': 2.2.9
