@@ -111,7 +111,7 @@ export const model = BlockModel.create()
         { name: 'pl7.app/vdj/scClonotypeKey' },
       ],
       annotations: { 'pl7.app/isAnchor': 'true' },
-    }], { refsWithEnrichments: true }),
+    }]),
   )
 
   .output('sequenceOptions', (ctx) => {

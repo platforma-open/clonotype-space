@@ -49,7 +49,7 @@ function setAnchorColumn(ref: PlRef | undefined) {
 
 const defaultOptions = computed((): PredefinedGraphOption<'scatterplot-umap'>[] | undefined => {
   if (!app.model.outputs.umapPcols)
-    return undefined;
+    return null;
 
   const umapPcols = app.model.outputs.umapPcols;
   function getIndex(name: string, pcols: PColumnIdAndSpec[]): number {
@@ -147,7 +147,6 @@ watch(
       v-model="app.model.ui.graphStateUMAP"
       v-model:selection="selection"
       chartType="scatterplot-umap"
-      :data-state-key="app.model.outputs.umapPf"
       :p-frame="app.model.outputs.umapPf"
       :default-options="defaultOptions"
     >
