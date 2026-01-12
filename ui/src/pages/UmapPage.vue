@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import type {
-  OutputWithStatus,
   PColumnIdAndSpec,
-  PFrameHandle,
   PlRef,
 } from '@platforma-sdk/model';
 import {
