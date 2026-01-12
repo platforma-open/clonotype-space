@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import type {
+  OutputWithStatus,
   PColumnIdAndSpec,
+  PFrameHandle,
   PlRef,
 } from '@platforma-sdk/model';
 import {
@@ -47,7 +49,7 @@ function setAnchorColumn(ref: PlRef | undefined) {
     : '');
 }
 
-const defaultOptions = computed((): PredefinedGraphOption<'scatterplot-umap'>[] | undefined => {
+const defaultOptions = computed((): PredefinedGraphOption<'scatterplot-umap'>[] | null => {
   if (!app.model.outputs.umapPcols)
     return null;
 
