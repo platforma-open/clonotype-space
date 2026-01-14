@@ -5,11 +5,11 @@ import type {
 } from '@platforma-sdk/model';
 import {
   getRawPlatformaInstance,
-  plRefsEqual,
 } from '@platforma-sdk/model';
 
 import '@milaboratories/graph-maker/styles';
-import { PlAccordionSection, PlAlert, PlBlockPage, PlBtnGhost, PlDropdownRef, PlLogView, PlMaskIcon24, PlNumberField, PlSlideModal } from '@platforma-sdk/ui-vue';
+import { PlAccordionSection, PlAlert, PlBlockPage, PlBtnGhost, PlBtnGroup, PlDropdownMulti, PlDropdownRef, PlLogView, PlMaskIcon24, PlNumberField, PlSlideModal, PlTextField } from '@platforma-sdk/ui-vue';
+import { listToOptions } from '@platforma-sdk/ui-vue';
 import { PlMultiSequenceAlignment } from '@milaboratories/multi-sequence-alignment';
 import { useApp } from '../app';
 
@@ -18,23 +18,61 @@ import { GraphMaker } from '@milaboratories/graph-maker';
 import type { PlSelectionModel } from '@platforma-sdk/model';
 import { asyncComputed } from '@vueuse/core';
 
-import { computed, ref, watch } from 'vue';
+import { computed, ref, watch, watchEffect } from 'vue';
 import { isSequenceColumn } from '../util';
 
 const app = useApp();
 
+const sequenceType = listToOptions(['aminoacid', 'nucleotide']);
+
+// Filter sequence options by selected sequence type
+const filteredSequenceOptions = computed(() => {
+  const allOptions = app.model.outputs.sequenceOptions;
+  if (!allOptions) return undefined;
+
+  const selectedType = app.model.args.sequenceType;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return allOptions.filter((option: any) => option.alphabet === selectedType);
+});
+
 function setAnchorColumn(ref: PlRef | undefined) {
   app.model.args.inputAnchor = ref;
-  app.model.ui.title = 'Clonotype Space - ' + (ref
-    ? app.model.outputs.inputOptions?.find((o) =>
-      plRefsEqual(o.ref, ref),
-    )?.label
-    : '');
+  // Reset sequence selection when dataset changes
+  app.model.args.sequencesRef = [];
 }
 
-const defaultOptions = computed((): PredefinedGraphOption<'scatterplot-umap'>[] | undefined => {
+// Build defaultBlockLabel from selected sequences, neighbors, and min_dist
+watchEffect(() => {
+  const parts: string[] = [];
+  // Add sequence labels
+  if (app.model.args.sequencesRef.length > 0 && app.model.outputs.sequenceOptions) {
+    const selectedLabels: string[] = [];
+    for (const seqRef of app.model.args.sequencesRef) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const option = app.model.outputs.sequenceOptions.find((opt: any) => opt.value === seqRef);
+      if (option?.label) {
+        selectedLabels.push(option.label);
+      }
+    }
+    if (selectedLabels.length > 0) {
+      selectedLabels.sort();
+      parts.push(selectedLabels.join('+'));
+    }
+  }
+  // Add neighbors parameter
+  if (app.model.args.umap_neighbors !== undefined) {
+    parts.push(`nbrs: ${app.model.args.umap_neighbors}`);
+  }
+  // Add min_dist parameter
+  if (app.model.args.umap_min_dist !== undefined) {
+    parts.push(`dist: ${app.model.args.umap_min_dist}`);
+  }
+  app.model.args.defaultBlockLabel = parts.join(', ');
+});
+
+const defaultOptions = computed((): PredefinedGraphOption<'scatterplot-umap'>[] | null => {
   if (!app.model.outputs.umapPcols)
-    return undefined;
+    return null;
 
   const umapPcols = app.model.outputs.umapPcols;
   function getIndex(name: string, pcols: PColumnIdAndSpec[]): number {
@@ -71,6 +109,48 @@ const selection = ref<PlSelectionModel>({
 const multipleSequenceAlignmentOpen = ref(false);
 const umapLogOpen = ref(false);
 
+// Clear selected sequences when sequence type changes
+watch(
+  () => app.model.args.sequenceType,
+  () => {
+    // Reset selection when sequence type changes
+    app.model.args.sequencesRef = [];
+  },
+);
+
+// Validate and auto-select sequences when options change
+watch(
+  () => [app.model.args.inputAnchor, app.model.outputs.sequenceOptions, filteredSequenceOptions.value] as const,
+  ([anchor, allOptions, filteredOptions]) => {
+    if (!anchor || !allOptions || !filteredOptions || filteredOptions.length === 0) {
+      return;
+    }
+
+    // Create a set of valid option values for fast lookup
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const validValues = new Set(filteredOptions.map((option: any) => option.value));
+
+    // Check if current selection contains invalid values (from previous dataset)
+    const currentSelection = app.model.args.sequencesRef;
+    const hasInvalidValues = currentSelection.some((value: string) => !validValues.has(value));
+
+    // Clear selection if it contains invalid values or if it's empty
+    if (hasInvalidValues || currentSelection.length === 0) {
+      // Auto-select ALL main sequences (e.g., for single-cell datasets with multiple primary chains)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const mainSequences = filteredOptions.filter((option: any) => option.isMain);
+      if (mainSequences.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        app.model.args.sequencesRef = mainSequences.map((option: any) => option.value);
+      } else {
+        // Fallback: if no main sequences found, select the first option
+        app.model.args.sequencesRef = [filteredOptions[0].value];
+      }
+    }
+  },
+  { immediate: true },
+);
+
 // Auto-close settings panel when block starts running
 watch(
   () => app.model.outputs.isRunning,
@@ -90,7 +170,6 @@ watch(
       v-model="app.model.ui.graphStateUMAP"
       v-model:selection="selection"
       chartType="scatterplot-umap"
-      :data-state-key="app.model.outputs.umapPf"
       :p-frame="app.model.outputs.umapPf"
       :default-options="defaultOptions"
     >
@@ -118,7 +197,28 @@ watch(
           @update:model-value="setAnchorColumn"
         />
 
+        <PlTextField
+          v-model="app.model.args.customBlockLabel"
+          label="Custom label"
+          :clearable="true"
+          :placeholder="app.model.args.defaultBlockLabel"
+          :style="{ width: '320px' }"
+        />
+
         <PlAccordionSection label="UMAP Parameters" :style="{ width: '320px' }">
+          <PlBtnGroup
+            v-model="app.model.args.sequenceType"
+            label="Sequence type"
+            :options="sequenceType"
+            :compact="true"
+          />
+          <PlDropdownMulti
+            v-model="app.model.args.sequencesRef"
+            :options="filteredSequenceOptions"
+            label="Select sequence column/s for UMAP"
+            required
+          />
+
           <div :style="{ display: 'flex', gap: '8px', width: '320px' }">
             <PlNumberField
               v-model="app.model.args.umap_neighbors"

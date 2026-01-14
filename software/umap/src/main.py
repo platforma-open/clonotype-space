@@ -95,13 +95,14 @@ def _process_sequence_chunk(args):
     
     return rows, cols
 
-def kmer_count_vectors(sequences, k=3, n_jobs=-1):
+def kmer_count_vectors(sequences, k=3, alphabet='aminoacid', n_jobs=-1):
     """
-    Convert amino acid sequences to k-mer count vectors using parallel processing.
+    Convert sequences to k-mer count vectors using parallel processing.
     
     Args:
-        sequences (list): List of amino acid sequences
+        sequences (list): List of sequences
         k (int): Size of k-mers to count
+        alphabet (str): Sequence alphabet type ('aminoacid' or 'nucleotide')
         n_jobs (int): Number of parallel workers. -1 uses all available CPUs (default: -1)
         
     Returns:
@@ -112,14 +113,17 @@ def kmer_count_vectors(sequences, k=3, n_jobs=-1):
     from collections import Counter
     import os
     
-    print(f"Generating {k}-mer count vectors...")
+    print(f"Generating {k}-mer count vectors for {alphabet} sequences...")
     
-    # Standard amino acid alphabet, including 'X', '*', and '_'
-    amino_acids = ['A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 
-                   'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'Y', 'X', '*', '_']
+    # Define alphabet characters based on sequence type
+    if alphabet == 'aminoacid':
+        alphabet_chars = ['A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L',
+                          'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'Y', 'X', '*', '_']
+    else:  # nucleotide
+        alphabet_chars = ['A', 'C', 'G', 'T', 'N']
     
     # Generate all possible k-mers and create lookup dictionary
-    all_kmers = [''.join(p) for p in itertools.product(amino_acids, repeat=k)]
+    all_kmers = [''.join(p) for p in itertools.product(alphabet_chars, repeat=k)]
     kmer_to_index = {kmer: idx for idx, kmer in enumerate(all_kmers)}
     
     num_seqs = len(sequences)
@@ -485,18 +489,20 @@ def main():
     )
     parser.add_argument('-i', '--input', required=True,
                         help='Input TSV file with sequence column')
-    parser.add_argument('-c', '--seq-col-start', default='aaSequence',
-                        help='Starting string of the column containing amino acid sequences (default: "aaSequence")')
+    parser.add_argument('-c', '--seq-col-start', default='sequence',
+                        help='Starting string of the column containing sequences (default: "sequence")')
     parser.add_argument('-u', '--umap-output', required=True,
                         help='Output TSV file for UMAP embeddings')
+    parser.add_argument('--alphabet', choices=['aminoacid', 'nucleotide'], default='aminoacid',
+                        help='Sequence alphabet type (default: aminoacid)')
     parser.add_argument('--umap-components', type=int, default=2,
                         help='Number of UMAP dimensions (default: 2)')
     parser.add_argument('--umap-neighbors', type=int, default=15,
                         help='UMAP n_neighbors (default: 15)')
     parser.add_argument('--umap-min-dist', type=float, default=0.5,
                         help='UMAP min_dist (default: 0.5)')
-    parser.add_argument('--k-mer-size', type=int, default=3,
-                        help='Size of k-mers to use for sequence analysis (default: 3 for amino acids)')
+    parser.add_argument('--k-mer-size', type=int, default=None,
+                        help='Size of k-mers to use for sequence analysis (default: 3 for aminoacid, 6 for nucleotide)')
     parser.add_argument('--output-dir', default='.',
                         help='Directory to save output files (default: current directory)')
     parser.add_argument('--svd-backend', type=str, default='auto',
@@ -521,13 +527,18 @@ def main():
 
     args = parser.parse_args()
 
+    # Auto-adjust k-mer size based on alphabet if not explicitly provided
+    if args.k_mer_size is None:
+        args.k_mer_size = 3 if args.alphabet == 'aminoacid' else 6
+
     # Create output directory if it doesn't exist
     os.makedirs(args.output_dir, exist_ok=True)
-    
-    print("Starting k-mer UMAP analysis for amino acid sequences")
+
+    sequence_type = "amino acid" if args.alphabet == 'aminoacid' else "nucleotide"
+    print(f"Starting k-mer UMAP analysis for {sequence_type} sequences")
     print(f"Input file: {args.input}")
     print(f"Output file: {args.umap_output}")
-    print(f"Parameters: k-mer size={args.k_mer_size}, "
+    print(f"Parameters: alphabet={args.alphabet}, k-mer size={args.k_mer_size}, "
           f"UMAP components={args.umap_components}, "
           f"UMAP neighbors={args.umap_neighbors}, "
           f"UMAP min_dist={args.umap_min_dist}, "
@@ -579,7 +590,8 @@ def main():
         sys.exit(1)
 
     seq_col = "combined_sequence"
-    df_input[seq_col] = df_input[seq_col_list].agg(''.join, axis=1)
+    # Fill NaN values with empty string and convert to string type before concatenating
+    df_input[seq_col] = df_input[seq_col_list].fillna('').astype(str).agg(''.join, axis=1)
     
     initial_seq_count = len(df_input)
     df_input = df_input[df_input[seq_col].notna() & (df_input[seq_col].str.strip('_').str.len() > 0)]
@@ -593,17 +605,22 @@ def main():
         print('Error: No valid sequences found after filtering. Exiting.')
         sys.exit(1)
     
-    valid_aas = {'A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 
-                 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'Y', '*', 'X', '_'} 
+    # Define valid characters based on alphabet type
+    if args.alphabet == 'aminoacid':
+        valid_chars = {'A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L',
+                       'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'Y', '*', 'X', '_'}
+    else:  # nucleotide
+        valid_chars = {'A', 'C', 'G', 'T', 'N', '_'}
     
     invalid_seq_indices = []
     for i, seq in enumerate(sequences):
         clean_seq = str(seq).upper()  # Keep underscores in middle, allow them as valid characters
-        if not all(aa in valid_aas for aa in clean_seq):
+        if not all(char in valid_chars for char in clean_seq):
             invalid_seq_indices.append(i)
     
     if invalid_seq_indices:
-        print(f"Warning: Found {len(invalid_seq_indices)} sequences with invalid amino acid characters. These sequences will be skipped.")
+        seq_type_name = "amino acid" if args.alphabet == 'aminoacid' else "nucleotide"
+        print(f"Warning: Found {len(invalid_seq_indices)} sequences with invalid {seq_type_name} characters. These sequences will be skipped.")
         print(f"Example invalid sequence (first 5): {[sequences[i] for i in invalid_seq_indices[:5]]}")
         
         # Create list of valid sequences and their indices
@@ -639,7 +656,7 @@ def main():
 
     # --- Start Timing: K-mer Counting ---
     start_time_kmer = time.time()
-    matrix = kmer_count_vectors(sequences, k=args.k_mer_size, n_jobs=args.n_jobs)
+    matrix = kmer_count_vectors(sequences, k=args.k_mer_size, alphabet=args.alphabet, n_jobs=args.n_jobs)
     end_time_kmer = time.time()
     print(f"K-mer counting completed in {end_time_kmer - start_time_kmer:.2f} seconds.\n")
     

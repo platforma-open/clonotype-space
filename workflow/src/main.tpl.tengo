@@ -9,28 +9,23 @@ xsv := import("@platforma-sdk/workflow-tengo:pframes.xsv")
 pframes := import("@platforma-sdk/workflow-tengo:pframes")
 
 slices := import("@platforma-sdk/workflow-tengo:slices")
+text := import("text")
 umapConv := import(":pf-umap-conv")
 
 pSpec := import("@platforma-sdk/workflow-tengo:pframes.spec")
 umapCalculationTpl := assets.importTemplate(":umap-calculation")
 
 wf.prepare(func(args){
-	// We need a table with cluster ID (optional) | clonotype id | selected ranking columns
+	// We need a table with clonotype id and selected sequence columns
 
 	bundleBuilder := wf.createPBundleBuilder()
 	bundleBuilder.ignoreMissingDomains() // to make query work for both bulk and single cell data
 	bundleBuilder.addAnchor("main", args.inputAnchor)
 
-	// Add full aa sequence column
-	bundleBuilder.addMulti({
-		axes: [{ anchor: "main", idx: 1 }],
-		annotations: {
-			"pl7.app/vdj/isMainSequence": "true"
-		},
-		domain: {
-			"pl7.app/alphabet": "aminoacid"
-		}
-	}, "aaSequence")
+	// Add user-selected sequence features
+	for ref in args.sequencesRef {
+		bundleBuilder.addSingle(ref)
+	}
 
 	return {
 		columns: bundleBuilder.build()
@@ -51,6 +46,9 @@ wf.body(func(args) {
 		ll.panic("umap_neighbors or umap_min_dist is undefined")
 	}
 
+	// Get alphabet from args (all selected sequences must have same alphabet)
+	alphabet := args.sequenceType
+
 	// Needed conditional variables
 	isSingleCell := datasetSpec.axesSpec[1].name == "pl7.app/vdj/scClonotypeKey"
 
@@ -58,26 +56,18 @@ wf.body(func(args) {
 	outputs := {}
 
 	////////// UMAP //////////
-	// Generate input TSV with Clonotype ID and aa sequence
+	// Generate input TSV with Clonotype ID and sequences
 	umapTable := pframes.tsvFileBuilder()
-	umapTable.mem("8GB"); // TODO: make this dynamic on input size
+	umapTable.mem("8GB") // TODO: make this dynamic on input size
 	umapTable.setAxisHeader(datasetSpec.axesSpec[1].name, "clonotypeKey")
-	for col in columns.getColumns("aaSequence") {
-		if isSingleCell {
-			// scFv case
-			if col.spec.name == "pl7.app/vdj/scFv-sequence" {
-				umapTable.add(col, {header: "aaSequence.scFv"})
-			} else {
-				// single cell case
-				chainLabel := col.spec.domain["pl7.app/vdj/scClonotypeChain"]
-				umapTable.add(col, {header: "aaSequence." + chainLabel})
-			}
-		} else {
-			// bulk case
-			chainLabel := col.spec.axesSpec[0].domain["pl7.app/vdj/chain"]
-			umapTable.add(col, {header: "aaSequence." + chainLabel})
-		}
+
+	// Add all selected sequences with unique headers
+	for nr, seqRef in args.sequencesRef {
+		seq := columns.getColumn(seqRef)
+		// Use sequence number to ensure uniqueness
+		umapTable.add(seq, {header: "sequence_" + string(nr)})
 	}
+
 	umapTable.mem("16GiB")
 	umapTable.cpu(1)
 	umapTable = umapTable.build()
@@ -90,6 +80,7 @@ wf.body(func(args) {
 		umapTable: umapTable,
 		umap_neighbors: umap_neighbors,
 		umap_min_dist: umap_min_dist,
+		alphabet: alphabet,
 		mem: mem,
 		cpu: cpu
 	})
@@ -109,13 +100,7 @@ wf.body(func(args) {
 			mem: "16GiB" // TODO: make this dynamic on input size
 		})
 
-	// Make trace with informative label
-	neighborsStr := string(umap_neighbors)
-	minDistStr := string(umap_min_dist)
-	
-	traceLabel := "UMAP (neighbors:" + neighborsStr + ", min_dist:" + minDistStr + ")"
-	
-	// Make trace
+	traceLabel := args.customBlockLabel || args.defaultBlockLabel
 	trace := pSpec.makeTrace(datasetSpec,
 		{
 			type: "milaboratories.clonotype-space",
