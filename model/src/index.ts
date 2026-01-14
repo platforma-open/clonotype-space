@@ -18,6 +18,8 @@ import {
 } from '@platforma-sdk/model';
 
 export type BlockArgs = {
+  defaultBlockLabel: string;
+  customBlockLabel: string;
   inputAnchor?: PlRef;
   sequencesRef: SUniversalPColumnId[];
   sequenceType: 'aminoacid' | 'nucleotide';
@@ -28,7 +30,6 @@ export type BlockArgs = {
 };
 
 export type UiState = {
-  title?: string;
   graphStateUMAP: GraphMakerState;
   alignmentModel: PlMultiSequenceAlignmentModel;
 };
@@ -66,6 +67,8 @@ function getColumns(ctx: RenderCtx<BlockArgs, UiState>): Columns | undefined {
 export const model = BlockModel.create()
 
   .withArgs<BlockArgs>({
+    defaultBlockLabel: '',
+    customBlockLabel: '',
     sequenceType: 'aminoacid',
     sequencesRef: [],
     umap_neighbors: 15,
@@ -75,7 +78,6 @@ export const model = BlockModel.create()
   })
 
   .withUiState<UiState>({
-    title: 'Clonotype Space',
     graphStateUMAP: {
       title: 'Clonotype Space UMAP',
       template: 'dots',
@@ -227,7 +229,9 @@ export const model = BlockModel.create()
 
   .output('isRunning', (ctx) => ctx.outputs?.getIsReadyOrError() === false)
 
-  .title((ctx) => ctx.uiState.title ?? 'Clonotype Space')
+  .title(() => 'Clonotype Space')
+
+  .subtitle((ctx) => ctx.args.customBlockLabel || ctx.args.defaultBlockLabel)
 
   .sections((_ctx) => ([
     { type: 'link', href: '/', label: 'Main' },

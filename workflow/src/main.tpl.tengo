@@ -100,33 +100,7 @@ wf.body(func(args) {
 			mem: "16GiB" // TODO: make this dynamic on input size
 		})
 
-	// Make trace with informative label
-	neighborsStr := string(umap_neighbors)
-	minDistStr := string(umap_min_dist)
-
-	// Build sequence labels list
-	seqLabels := []
-	for seqRef in args.sequencesRef {
-		seqSpec := columns.getSpec(seqRef)
-		seqLabel := seqSpec.annotations["pl7.app/label"]
-		if is_undefined(seqLabel) {
-			// Fallback to feature name if label not available
-			feature := seqSpec.domain["pl7.app/vdj/feature"]
-			if !is_undefined(feature) {
-				alphabetSuffix := alphabet == "aminoacid" ? " aa" : " nt"
-				seqLabel = string(feature) + alphabetSuffix
-			} else {
-				seqLabel = "sequence"
-			}
-		}
-		seqLabels = append(seqLabels, seqLabel)
-	}
-	seqLabels = slices.quickSort(seqLabels)
-	seqLabelsStr := text.join(seqLabels, "+")
-
-	traceLabel := "UMAP (seq:" + seqLabelsStr + ", neighbors:" + neighborsStr + ", min_dist:" + minDistStr + ")"
-	
-	// Make trace
+	traceLabel := args.customBlockLabel || args.defaultBlockLabel
 	trace := pSpec.makeTrace(datasetSpec,
 		{
 			type: "milaboratories.clonotype-space",
