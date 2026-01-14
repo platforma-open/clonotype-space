@@ -1,5 +1,16 @@
 # @platforma-open/milaboratories.clonotype-space.workflow
 
+## 2.12.0
+
+### Minor Changes
+
+- 45fcc5c: Allow to select feature for calculations
+
+### Patch Changes
+
+- Updated dependencies [45fcc5c]
+  - @platforma-open/milaboratories.clonotype-space.umap@2.10.0
+
 ## 2.11.10
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.model
 
+## 2.5.0
+
+### Minor Changes
+
+- 45fcc5c: Allow to select feature for calculations
+
 ## 2.4.4
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.umap
 
+## 2.10.0
+
+### Minor Changes
+
+- 45fcc5c: Allow to select feature for calculations
+
 ## 2.9.0
 
 ### Minor Changes
