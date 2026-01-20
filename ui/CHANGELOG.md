@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.ui
 
+## 2.6.1
+
+### Patch Changes
+
+- b7466b8: Labels migration
+
 ## 2.6.0
 
 ### Minor Changes
