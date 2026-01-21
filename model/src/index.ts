@@ -67,7 +67,7 @@ function getColumns(ctx: RenderCtx<BlockArgs, UiState>): Columns | undefined {
 export const model = BlockModel.create()
 
   .withArgs<BlockArgs>({
-    defaultBlockLabel: '',
+    defaultBlockLabel: 'Select Dataset',
     customBlockLabel: '',
     sequenceType: 'aminoacid',
     sequencesRef: [],
