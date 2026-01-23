@@ -20,10 +20,5 @@
     "typescript": "catalog:",
     "shx": "catalog:"
   },
-  "packageManager": "pnpm@9.12.0",
-  "pnpm": {
-    "overrides": {
-      "@milaboratories/graph-maker": "file:/Users/mzueva/Work/dev/platforma-uber-repo/core/visualizations/packages/graph-maker/package.tgz"
-    }
-  }
+  "packageManager": "pnpm@9.12.0"
 }
