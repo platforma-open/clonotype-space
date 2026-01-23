@@ -1,5 +1,6 @@
 ---
 "@platforma-open/milaboratories.clonotype-space.model": patch
+"@platforma-open/milaboratories.clonotype-space.ui": patch
 ---
 
-Set default block label
+Improve block subtitle generation

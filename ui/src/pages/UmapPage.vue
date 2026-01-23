@@ -18,7 +18,7 @@ import { GraphMaker } from '@milaboratories/graph-maker';
 import type { PlSelectionModel } from '@platforma-sdk/model';
 import { asyncComputed } from '@vueuse/core';
 
-import { computed, ref, watch, watchEffect } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { isSequenceColumn } from '../util';
 
 const app = useApp();
@@ -40,35 +40,6 @@ function setAnchorColumn(ref: PlRef | undefined) {
   // Reset sequence selection when dataset changes
   app.model.args.sequencesRef = [];
 }
-
-// Build defaultBlockLabel from selected sequences, neighbors, and min_dist
-watchEffect(() => {
-  const parts: string[] = [];
-  // Add sequence labels
-  if (app.model.args.sequencesRef.length > 0 && app.model.outputs.sequenceOptions) {
-    const selectedLabels: string[] = [];
-    for (const seqRef of app.model.args.sequencesRef) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const option = app.model.outputs.sequenceOptions.find((opt: any) => opt.value === seqRef);
-      if (option?.label) {
-        selectedLabels.push(option.label);
-      }
-    }
-    if (selectedLabels.length > 0) {
-      selectedLabels.sort();
-      parts.push(selectedLabels.join('+'));
-    }
-  }
-  // Add neighbors parameter
-  if (app.model.args.umap_neighbors !== undefined) {
-    parts.push(`nbrs: ${app.model.args.umap_neighbors}`);
-  }
-  // Add min_dist parameter
-  if (app.model.args.umap_min_dist !== undefined) {
-    parts.push(`dist: ${app.model.args.umap_min_dist}`);
-  }
-  app.model.args.defaultBlockLabel = parts.join(', ');
-});
 
 const defaultOptions = computed((): PredefinedGraphOption<'scatterplot-umap'>[] | null => {
   if (!app.model.outputs.umapPcols)
@@ -199,7 +170,7 @@ watch(
 
         <PlTextField
           v-model="app.model.args.customBlockLabel"
-          label="Custom label"
+          label="Block title"
           :clearable="true"
           :placeholder="app.model.args.defaultBlockLabel"
           :style="{ width: '320px' }"
