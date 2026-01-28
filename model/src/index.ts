@@ -16,6 +16,8 @@ import {
   BlockModel,
   createPFrameForGraphs,
 } from '@platforma-sdk/model';
+import strings from '@milaboratories/strings';
+import { getDefaultBlockLabel } from './label';
 
 export type BlockArgs = {
   defaultBlockLabel: string;
@@ -40,8 +42,8 @@ type Columns = {
   props: Column[];
 };
 
-function getColumns(ctx: RenderCtx<BlockArgs, UiState>): Columns | undefined {
-  const anchor = ctx.args.inputAnchor;
+function getColumns(ctx: Pick<RenderCtx<BlockArgs, UiState>, 'args' | 'resultPool'>): Columns | undefined {
+  const anchor = ctx.args?.inputAnchor;
   if (anchor === undefined)
     return undefined;
 
@@ -67,7 +69,11 @@ function getColumns(ctx: RenderCtx<BlockArgs, UiState>): Columns | undefined {
 export const model = BlockModel.create()
 
   .withArgs<BlockArgs>({
-    defaultBlockLabel: '',
+    defaultBlockLabel: getDefaultBlockLabel({
+      sequenceLabels: [],
+      umap_neighbors: 15,
+      umap_min_dist: 0.5,
+    }),
     customBlockLabel: '',
     sequenceType: 'aminoacid',
     sequencesRef: [],
@@ -234,9 +240,11 @@ export const model = BlockModel.create()
   .subtitle((ctx) => ctx.args.customBlockLabel || ctx.args.defaultBlockLabel)
 
   .sections((_ctx) => ([
-    { type: 'link', href: '/', label: 'Main' },
+    { type: 'link', href: '/', label: strings.titles.main },
   ]))
 
   .done(2);
 
 export type BlockOutputs = InferOutputsType<typeof model>;
+
+export { getDefaultBlockLabel } from './label';
