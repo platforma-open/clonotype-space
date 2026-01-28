@@ -11,6 +11,7 @@ import '@milaboratories/graph-maker/styles';
 import { PlAccordionSection, PlAlert, PlBlockPage, PlBtnGhost, PlBtnGroup, PlDropdownMulti, PlDropdownRef, PlLogView, PlMaskIcon24, PlNumberField, PlSlideModal, PlTextField } from '@platforma-sdk/ui-vue';
 import { listToOptions } from '@platforma-sdk/ui-vue';
 import { PlMultiSequenceAlignment } from '@milaboratories/multi-sequence-alignment';
+import strings from '@milaboratories/strings';
 import { useApp } from '../app';
 
 import type { PredefinedGraphOption } from '@milaboratories/graph-maker';
@@ -143,16 +144,17 @@ watch(
       chartType="scatterplot-umap"
       :p-frame="app.model.outputs.umapPf"
       :default-options="defaultOptions"
+      :status-text="{ noPframe: { title: strings.callToActions.configureSettingsAndRun } }"
     >
       <template #titleLineSlot>
         <PlBtnGhost
           icon="dna"
           @click.stop="() => (multipleSequenceAlignmentOpen = true)"
         >
-          Multiple Sequence Alignment
+          {{ strings.titles.multipleSequenceAlignment }}
         </PlBtnGhost>
         <PlBtnGhost @click.stop="() => (umapLogOpen = true)">
-          Logs
+          {{ strings.titles.logs }}
           <template #append>
             <PlMaskIcon24 name="file-logs" />
           </template>
@@ -308,7 +310,7 @@ watch(
       width="100%"
       :close-on-outside-click="false"
     >
-      <template #title>Multiple Sequence Alignment</template>
+      <template #title>{{ strings.titles.multipleSequenceAlignment }}</template>
       <PlMultiSequenceAlignment
         v-model="app.model.ui.alignmentModel"
         :sequence-column-predicate="isSequenceColumn"

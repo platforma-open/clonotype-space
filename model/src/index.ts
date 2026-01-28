@@ -16,6 +16,7 @@ import {
   BlockModel,
   createPFrameForGraphs,
 } from '@platforma-sdk/model';
+import strings from '@milaboratories/strings';
 import { getDefaultBlockLabel } from './label';
 
 export type BlockArgs = {
@@ -239,7 +240,7 @@ export const model = BlockModel.create()
   .subtitle((ctx) => ctx.args.customBlockLabel || ctx.args.defaultBlockLabel)
 
   .sections((_ctx) => ([
-    { type: 'link', href: '/', label: 'Main' },
+    { type: 'link', href: '/', label: strings.titles.main },
   ]))
 
   .done(2);
