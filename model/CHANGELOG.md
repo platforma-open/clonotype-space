@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.model
 
+## 2.5.1
+
+### Patch Changes
+
+- 6bce79f: Improve block subtitle generation
+
 ## 2.5.0
 
 ### Minor Changes

@@ -1,5 +1,13 @@
 # @platforma-open/milaboratories.clonotype-space.ui
 
+## 2.6.3
+
+### Patch Changes
+
+- 6bce79f: Improve block subtitle generation
+- Updated dependencies [6bce79f]
+  - @platforma-open/milaboratories.clonotype-space.model@2.5.1
+
 ## 2.6.2
 
 ### Patch Changes
