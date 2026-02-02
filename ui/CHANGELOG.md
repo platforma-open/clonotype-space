@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.ui
 
+## 2.6.4
+
+### Patch Changes
+
+- fce50e5: Fix default label derivation
+
 ## 2.6.3
 
 ### Patch Changes
