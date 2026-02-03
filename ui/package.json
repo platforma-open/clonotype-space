@@ -1,6 +1,6 @@
 {
   "name": "@platforma-open/milaboratories.clonotype-space.ui",
-  "version": "2.6.3",
+  "version": "2.6.4",
   "type": "module",
   "scripts": {
     "dev": "ts-builder serve --target browser",
@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@milaboratories/graph-maker": "catalog:",
+    "@milaboratories/helpers": "catalog:",
     "@milaboratories/multi-sequence-alignment": "catalog:",
     "@milaboratories/strings": "catalog:",
     "@platforma-open/milaboratories.clonotype-space.model": "workspace:*",
