@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.test
 
+## 2.2.0
+
+### Minor Changes
+
+- 8b5acc7: fix scfv input, dependencies updates
+
 ## 2.1.0
 
 ### Minor Changes

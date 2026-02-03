@@ -1,5 +1,18 @@
 # @platforma-open/milaboratories.clonotype-space
 
+## 2.4.0
+
+### Minor Changes
+
+- 8b5acc7: fix scfv input, dependencies updates
+
+### Patch Changes
+
+- Updated dependencies [8b5acc7]
+  - @platforma-open/milaboratories.clonotype-space.model@2.6.0
+  - @platforma-open/milaboratories.clonotype-space.ui@2.7.0
+  - @platforma-open/milaboratories.clonotype-space.workflow@2.13.0
+
 ## 2.3.4
 
 ### Patch Changes

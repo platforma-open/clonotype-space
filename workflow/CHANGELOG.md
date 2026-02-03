@@ -1,5 +1,16 @@
 # @platforma-open/milaboratories.clonotype-space.workflow
 
+## 2.13.0
+
+### Minor Changes
+
+- 8b5acc7: fix scfv input, dependencies updates
+
+### Patch Changes
+
+- Updated dependencies [8b5acc7]
+  - @platforma-open/milaboratories.clonotype-space.umap@2.11.0
+
 ## 2.12.0
 
 ### Minor Changes

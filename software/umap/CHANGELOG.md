@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.umap
 
+## 2.11.0
+
+### Minor Changes
+
+- 8b5acc7: fix scfv input, dependencies updates
+
 ## 2.10.0
 
 ### Minor Changes
