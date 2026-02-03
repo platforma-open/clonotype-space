@@ -19,8 +19,8 @@ catalog:
   '@platforma-sdk/eslint-config': 1.2.0
   '@platforma-sdk/test': 1.53.4
   '@milaboratories/helpers': 1.13.0
-  '@milaboratories/graph-maker': 1.1.218
-  '@milaboratories/multi-sequence-alignment': 1.46.3
+  '@milaboratories/graph-maker': 1.1.219
+  '@milaboratories/multi-sequence-alignment': 1.46.4
   '@milaboratories/strings': 0.1.0
 
   '@milaboratories/software-pframes-conv': 2.2.9
@@ -33,7 +33,7 @@ catalog:
   'typescript': ~5.6.3
   'turbo': ^2.6.3
   'vite': ^6.2.2
-  'vitest': ^4.0.7
+  'vitest': ^4.0.18
   'eslint': ^9.25.1
   '@changesets/cli': ^2.29.8
   'js-yaml': ^4.1.0

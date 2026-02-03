@@ -139,6 +139,11 @@ export const model = BlockModel.create()
           'pl7.app/vdj/scClonotypeChain/index': 'primary',
         },
       });
+      // Single-cell: include scFv construct sequences
+      sequenceMatchers.push({
+        axes: [{ anchor: 'main', idx: 1 }],
+        name: 'pl7.app/vdj/scFv-sequence',
+      });
     } else {
       // Bulk: get regular sequences (all types)
       sequenceMatchers.push({
