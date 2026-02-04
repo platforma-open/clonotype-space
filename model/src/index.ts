@@ -196,7 +196,7 @@ export const model = BlockModel.create()
     return createPFrameForGraphs(ctx, columns.props);
   })
 
-  .outputWithStatus('umapPf', (ctx): PFrameHandle | undefined => {
+  .retentiveOutputWithStatus('umapPf', (ctx): PFrameHandle | undefined => {
     const pCols = ctx.outputs?.resolve('umapPf')?.getPColumns();
     if (pCols === undefined) {
       return undefined;
