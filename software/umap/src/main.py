@@ -731,9 +731,18 @@ def main():
 
     else:
         print("Running UMAP dimensionality reduction (fitting and transforming)...")
-        umap_embed = umap_model.fit_transform(svd_embed)
-        end_time_umap_fit_transform = time.time()
-        print(f"UMAP model fitting completed in {end_time_umap_fit_transform - start_time_umap_fit:.2f} seconds.\n")
+        try:
+            umap_embed = umap_model.fit_transform(svd_embed)
+            end_time_umap_fit_transform = time.time()
+            print(f"UMAP model fitting completed in {end_time_umap_fit_transform - start_time_umap_fit:.2f} seconds.\n")
+        except Exception as e:
+            print(f"Warning: GPU UMAP failed - {e}")
+            print("Falling back to CPU-based UMAP...")
+            umap_model, _ = create_umap_model('sklearn', args.umap_components, args.umap_neighbors, args.umap_min_dist)
+            print("Running UMAP on CPU (fitting and transforming)...")
+            umap_embed = umap_model.fit_transform(svd_embed)
+            end_time_umap_fit_transform = time.time()
+            print(f"UMAP model fitting completed in {end_time_umap_fit_transform - start_time_umap_fit:.2f} seconds.\n")
 
     # --- Start Timing: Save Output ---
     start_time_save = time.time()
