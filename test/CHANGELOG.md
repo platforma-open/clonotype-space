@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.test
 
+## 2.3.0
+
+### Minor Changes
+
+- b014947: Improved automatic detection and graceful handling of GPU availability
+
 ## 2.2.0
 
 ### Minor Changes

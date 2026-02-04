@@ -1,5 +1,16 @@
 # @platforma-open/milaboratories.clonotype-space.workflow
 
+## 2.14.0
+
+### Minor Changes
+
+- b014947: Improved automatic detection and graceful handling of GPU availability
+
+### Patch Changes
+
+- Updated dependencies [b014947]
+  - @platforma-open/milaboratories.clonotype-space.umap@2.12.0
+
 ## 2.13.0
 
 ### Minor Changes

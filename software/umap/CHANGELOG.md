@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.umap
 
+## 2.12.0
+
+### Minor Changes
+
+- b014947: Improved automatic detection and graceful handling of GPU availability
+
 ## 2.11.0
 
 ### Minor Changes

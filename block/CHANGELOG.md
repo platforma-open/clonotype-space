@@ -1,5 +1,18 @@
 # @platforma-open/milaboratories.clonotype-space
 
+## 2.5.0
+
+### Minor Changes
+
+- b014947: Improved automatic detection and graceful handling of GPU availability
+
+### Patch Changes
+
+- Updated dependencies [b014947]
+  - @platforma-open/milaboratories.clonotype-space.model@2.7.0
+  - @platforma-open/milaboratories.clonotype-space.ui@2.8.0
+  - @platforma-open/milaboratories.clonotype-space.workflow@2.14.0
+
 ## 2.4.0
 
 ### Minor Changes
