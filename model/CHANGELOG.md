@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.model
 
+## 2.7.1
+
+### Patch Changes
+
+- 5e36132: update dependencies
+
 ## 2.7.0
 
 ### Minor Changes
