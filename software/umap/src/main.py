@@ -69,31 +69,45 @@ FIXED_SAMPLE_SIZE_LARGE_DATA = 100000
 def _process_sequence_chunk(args):
     """
     Worker function for parallel k-mer counting.
-    
+
     Args:
-        args: Tuple of (sequences_chunk, start_idx, k, kmer_to_index)
-    
+        args: Tuple of (sequences_chunk, start_idx, k, kmer_to_index, num_kmers)
+
     Returns:
-        Tuple of (rows, cols) lists for COO matrix construction
+        scipy.sparse.csr_matrix: Sparse sub-matrix for this chunk
     """
-    sequences_chunk, start_idx, k, kmer_to_index = args
-    
+    from collections import Counter
+    sequences_chunk, start_idx, k, kmer_to_index, num_kmers = args
+
+    num_seqs = len(sequences_chunk)
     rows = []
     cols = []
-    
+
     for local_idx, seq in enumerate(sequences_chunk):
-        global_idx = start_idx + local_idx
         seq_upper = str(seq).upper()
-        
+
         # Extract all k-mers from this sequence
         for pos in range(len(seq_upper) - k + 1):
             kmer = seq_upper[pos:pos + k]
             kmer_idx = kmer_to_index.get(kmer)
             if kmer_idx is not None:
-                rows.append(global_idx)
+                rows.append(local_idx)
                 cols.append(kmer_idx)
-    
-    return rows, cols
+
+    # Aggregate counts locally per chunk
+    data_dict = Counter(zip(rows, cols))
+    if not data_dict:
+        return sparse.csr_matrix((num_seqs, num_kmers), dtype=np.int32)
+
+    rows_final = np.array([r for r, c in data_dict.keys()], dtype=np.int32)
+    cols_final = np.array([c for r, c in data_dict.keys()], dtype=np.int32)
+    data_final = np.array(list(data_dict.values()), dtype=np.int32)
+
+    return sparse.coo_matrix(
+        (data_final, (rows_final, cols_final)),
+        shape=(num_seqs, num_kmers),
+        dtype=np.int32
+    ).tocsr()
 
 def kmer_count_vectors(sequences, k=3, alphabet='aminoacid', n_jobs=-1):
     """
@@ -110,7 +124,6 @@ def kmer_count_vectors(sequences, k=3, alphabet='aminoacid', n_jobs=-1):
     """
     from concurrent.futures import ProcessPoolExecutor
     from multiprocessing import get_context
-    from collections import Counter
     import os
     
     print(f"Generating {k}-mer count vectors for {alphabet} sequences...")
@@ -145,51 +158,31 @@ def kmer_count_vectors(sequences, k=3, alphabet='aminoacid', n_jobs=-1):
     if n_jobs == 1:
         # Single-threaded processing (no multiprocessing overhead)
         print(f"Processing {num_seqs} sequences (single-threaded)...")
-        rows, cols = _process_sequence_chunk((sequences, 0, k, kmer_to_index))
+        matrix = _process_sequence_chunk((sequences, 0, k, kmer_to_index, num_kmers))
     else:
         # Split sequences into chunks for parallel processing
         # Use 4 chunks per worker for better load balancing
         chunk_size = max(1000, num_seqs // (n_jobs * 4))
         chunks = []
-        
+
         for i in range(0, num_seqs, chunk_size):
             chunk_end = min(i + chunk_size, num_seqs)
-            chunks.append((sequences[i:chunk_end], i, k, kmer_to_index))
-        
+            chunks.append((sequences[i:chunk_end], i, k, kmer_to_index, num_kmers))
+
         print(f"Processing {num_seqs} sequences using {n_jobs} parallel workers ({len(chunks)} chunks)...")
-        
+
         # Process chunks in parallel using ProcessPoolExecutor with spawn context
-        # Context manager ensures proper shutdown and cleanup
+        # Each worker returns a sparse sub-matrix
         with ProcessPoolExecutor(max_workers=n_jobs, mp_context=mp_context) as executor:
-            results = list(executor.map(_process_sequence_chunk, chunks))
-        
-        # Merge results from all workers
-        print("Merging results from parallel workers...")
-        rows = []
-        cols = []
-        for chunk_rows, chunk_cols in results:
-            rows.extend(chunk_rows)
-            cols.extend(chunk_cols)
-    
-    # Build sparse matrix from collected (row, col) pairs
-    # Use Counter to aggregate k-mer counts
-    print(f"Building sparse matrix from {len(rows)} k-mer occurrences...")
-    data_dict = Counter(zip(rows, cols))
-    
-    rows_final = np.array([r for r, c in data_dict.keys()], dtype=np.int32)
-    cols_final = np.array([c for r, c in data_dict.keys()], dtype=np.int32)
-    data_final = np.array(list(data_dict.values()), dtype=np.int32)
-    
-    # Create COO matrix and convert to CSR for efficient operations
-    matrix = sparse.coo_matrix(
-        (data_final, (rows_final, cols_final)), 
-        shape=(num_seqs, num_kmers), 
-        dtype=np.int32
-    )
-    
+            sub_matrices = list(executor.map(_process_sequence_chunk, chunks))
+
+        # Stack sparse sub-matrices vertically (much faster than merging raw indices)
+        print("Stacking sparse sub-matrices...")
+        matrix = sparse.vstack(sub_matrices, format='csr')
+
     print(f"Sparse matrix created: {matrix.shape}, {matrix.nnz} non-zero entries")
-    
-    return matrix.tocsr()
+
+    return matrix
 
 def create_svd_model(backend, n_components, random_state=42):
     """Create TruncatedSVD model with specified parameters."""
