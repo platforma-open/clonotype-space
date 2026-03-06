@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.umap
 
+## 2.13.0
+
+### Minor Changes
+
+- 11dff2f: Improved performance on large datasets.
+
 ## 2.12.0
 
 ### Minor Changes
