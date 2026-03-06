@@ -24,7 +24,7 @@ catalog:
   '@milaboratories/strings': 0.1.0
 
   '@milaboratories/software-pframes-conv': 2.2.9
-  '@platforma-open/milaboratories.runenv-python-3': 1.6.2
+  '@platforma-open/milaboratories.runenv-python-3': 1.7.9
 
   # Common dependencies - can use ^ or ~
   '@vueuse/core': ^13.3.0
