@@ -7,7 +7,6 @@ import {
   getRawPlatformaInstance,
 } from '@platforma-sdk/model';
 
-import '@milaboratories/graph-maker/styles';
 import { PlAccordionSection, PlAlert, PlBlockPage, PlBtnGhost, PlBtnGroup, PlDropdownMulti, PlDropdownRef, PlLogView, PlMaskIcon24, PlNumberField, PlSlideModal, PlTextField } from '@platforma-sdk/ui-vue';
 import { listToOptions } from '@platforma-sdk/ui-vue';
 import { PlMultiSequenceAlignment } from '@milaboratories/multi-sequence-alignment';
