@@ -1,25 +1,30 @@
 import type { GraphMakerState } from '@milaboratories/graph-maker';
+import { graphMakerPlugin } from '@milaboratories/graph-maker/plugin';
 import type {
+  BlockRenderCtx,
   DataInfo,
   InferOutputsType,
   PColumn,
   PColumnIdAndSpec,
   PColumnValues,
-  PFrameHandle,
   PlMultiSequenceAlignmentModel,
   PlRef,
-  RenderCtx,
   SUniversalPColumnId,
   TreeNodeAccessor,
 } from '@platforma-sdk/model';
 import {
-  BlockModel,
+  BlockModelV3,
+  DataModelBuilder,
   createPFrameForGraphs,
 } from '@platforma-sdk/model';
 import strings from '@milaboratories/strings';
 import { getDefaultBlockLabel } from './label';
 
-export type BlockArgs = {
+// ---------------------------------------------------------------------------
+// Block data versions
+// ---------------------------------------------------------------------------
+
+type OldArgs = {
   defaultBlockLabel: string;
   customBlockLabel: string;
   inputAnchor?: PlRef;
@@ -31,10 +36,109 @@ export type BlockArgs = {
   mem: number;
 };
 
-export type UiState = {
+type OldUiState = {
   graphStateUMAP: GraphMakerState;
   alignmentModel: PlMultiSequenceAlignmentModel;
 };
+
+/** v1 block data — includes graph state that will be transferred to plugin */
+type BlockDataV1 = {
+  defaultBlockLabel: string;
+  customBlockLabel: string;
+  inputAnchor?: PlRef;
+  sequencesRef: SUniversalPColumnId[];
+  sequenceType: 'aminoacid' | 'nucleotide';
+  umap_neighbors: number;
+  umap_min_dist: number;
+  cpu: number;
+  mem: number;
+  graphStateUMAP: GraphMakerState;
+  alignmentModel: PlMultiSequenceAlignmentModel;
+};
+
+/** v2 block data — graph state lives in plugin */
+export type BlockData = {
+  defaultBlockLabel: string;
+  customBlockLabel: string;
+  inputAnchor?: PlRef;
+  sequencesRef: SUniversalPColumnId[];
+  sequenceType: 'aminoacid' | 'nucleotide';
+  umap_neighbors: number;
+  umap_min_dist: number;
+  cpu: number;
+  mem: number;
+  alignmentModel: PlMultiSequenceAlignmentModel;
+};
+
+// ---------------------------------------------------------------------------
+// Plugin instances
+// ---------------------------------------------------------------------------
+
+const umapPlugin = graphMakerPlugin.create({
+  pluginId: 'umap',
+  transferAt: 'v1',
+  config: {
+    chartType: 'scatterplot-umap',
+    initialTitle: 'Clonotype Space UMAP',
+    initialTemplate: 'dots',
+    initialState: {
+      currentTab: 'settings',
+      layersSettings: {
+        dots: {
+          dotFill: '#99E099',
+        },
+      },
+    },
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Data model
+// ---------------------------------------------------------------------------
+
+const dataModel = new DataModelBuilder()
+  .from<BlockDataV1>('v1')
+  .upgradeLegacy<OldArgs, OldUiState>(({ args, uiState }) => ({
+    defaultBlockLabel: args.defaultBlockLabel,
+    customBlockLabel: args.customBlockLabel,
+    inputAnchor: args.inputAnchor,
+    sequencesRef: args.sequencesRef,
+    sequenceType: args.sequenceType,
+    umap_neighbors: args.umap_neighbors,
+    umap_min_dist: args.umap_min_dist,
+    cpu: args.cpu,
+    mem: args.mem,
+    graphStateUMAP: uiState.graphStateUMAP,
+    alignmentModel: uiState.alignmentModel,
+  }))
+  .transfer(umapPlugin, (v1) => ({
+    state: v1.graphStateUMAP,
+    selection: undefined,
+    chartType: 'scatterplot-umap' as const,
+    readonlyInputs: [],
+    allowChartDeleting: false,
+    allowTitleEditing: false,
+  }))
+  .migrate<BlockData>('v2', ({ graphStateUMAP: _, ...rest }) => rest)
+  .init(() => ({
+    defaultBlockLabel: getDefaultBlockLabel({
+      sequenceLabels: [],
+      umap_neighbors: 15,
+      umap_min_dist: 0.5,
+    }),
+    customBlockLabel: '',
+    sequenceType: 'aminoacid',
+    sequencesRef: [],
+    umap_neighbors: 15,
+    umap_min_dist: 0.5,
+    mem: 64,
+    cpu: 8,
+    alignmentModel: {},
+  }));
+
+// ---------------------------------------------------------------------------
+// Helper
+// ---------------------------------------------------------------------------
 
 type Column = PColumn<DataInfo<TreeNodeAccessor> | TreeNodeAccessor | PColumnValues>;
 
@@ -42,8 +146,8 @@ type Columns = {
   props: Column[];
 };
 
-function getColumns(ctx: Pick<RenderCtx<BlockArgs, UiState>, 'args' | 'resultPool'>): Columns | undefined {
-  const anchor = ctx.args?.inputAnchor;
+function getColumns(ctx: Pick<BlockRenderCtx<unknown, BlockData>, 'data' | 'resultPool'>): Columns | undefined {
+  const anchor = ctx.data.inputAnchor;
   if (anchor === undefined)
     return undefined;
 
@@ -66,45 +170,29 @@ function getColumns(ctx: Pick<RenderCtx<BlockArgs, UiState>, 'args' | 'resultPoo
   };
 }
 
-export const model = BlockModel.create()
+// ---------------------------------------------------------------------------
+// Block model
+// ---------------------------------------------------------------------------
 
-  .withArgs<BlockArgs>({
-    defaultBlockLabel: getDefaultBlockLabel({
-      sequenceLabels: [],
-      umap_neighbors: 15,
-      umap_min_dist: 0.5,
-    }),
-    customBlockLabel: '',
-    sequenceType: 'aminoacid',
-    sequencesRef: [],
-    umap_neighbors: 15,
-    umap_min_dist: 0.5,
-    mem: 64,
-    cpu: 8,
+export const platforma = BlockModelV3.create(dataModel)
+
+  .args((data) => {
+    if (!data.inputAnchor) throw new Error('Dataset is required');
+    if (!data.sequencesRef.length) throw new Error('Sequence columns are required');
+    if (data.umap_neighbors === undefined) throw new Error('Neighbors is required');
+    if (data.umap_min_dist === undefined) throw new Error('Minimum distance is required');
+    if (data.mem === undefined) throw new Error('Memory is required');
+    if (data.cpu === undefined) throw new Error('CPU is required');
+    return {
+      inputAnchor: data.inputAnchor,
+      sequencesRef: data.sequencesRef,
+      sequenceType: data.sequenceType,
+      umap_neighbors: data.umap_neighbors,
+      umap_min_dist: data.umap_min_dist,
+      cpu: data.cpu,
+      mem: data.mem,
+    };
   })
-
-  .withUiState<UiState>({
-    graphStateUMAP: {
-      title: 'Clonotype Space UMAP',
-      template: 'dots',
-      currentTab: 'settings',
-      layersSettings: {
-        dots: {
-          dotFill: '#99E099',
-        },
-      },
-    },
-    alignmentModel: {},
-  })
-
-  .argsValid((ctx) =>
-    ctx.args.inputAnchor !== undefined
-    && ctx.args.sequencesRef.length > 0
-    && ctx.args.umap_neighbors !== undefined
-    && ctx.args.umap_min_dist !== undefined
-    && ctx.args.mem !== undefined
-    && ctx.args.cpu !== undefined,
-  )
 
   .output('inputOptions', (ctx) =>
     ctx.resultPool.getOptions([{
@@ -123,7 +211,7 @@ export const model = BlockModel.create()
   )
 
   .output('sequenceOptions', (ctx) => {
-    const ref = ctx.args.inputAnchor;
+    const ref = ctx.data.inputAnchor;
     if (ref === undefined) return undefined;
 
     const isSingleCell = ctx.resultPool.getPColumnSpecByRef(ref)?.axesSpec[1].name === 'pl7.app/vdj/scClonotypeKey';
@@ -196,15 +284,6 @@ export const model = BlockModel.create()
     return createPFrameForGraphs(ctx, columns.props);
   })
 
-  .outputWithStatus('umapPf', (ctx): PFrameHandle | undefined => {
-    const pCols = ctx.outputs?.resolve('umapPf')?.getPColumns();
-    if (pCols === undefined) {
-      return undefined;
-    }
-
-    return createPFrameForGraphs(ctx, pCols);
-  })
-
   .output('umapOutput', (ctx) => ctx.outputs?.resolve('umapOutput')?.getLogHandle())
 
   // Create a PTable with the first dimension of the UMAP to test if file is empty
@@ -238,18 +317,20 @@ export const model = BlockModel.create()
     );
   })
 
-  .output('isRunning', (ctx) => ctx.outputs?.getIsReadyOrError() === false)
-
   .title(() => 'Clonotype Space')
 
-  .subtitle((ctx) => ctx.args.customBlockLabel || ctx.args.defaultBlockLabel)
+  .subtitle((ctx) => ctx.data.customBlockLabel || ctx.data.defaultBlockLabel)
 
   .sections((_ctx) => ([
     { type: 'link', href: '/', label: strings.titles.main },
   ]))
 
-  .done(2);
+  .plugin(umapPlugin, {
+    blockColumns: (ctx) => ctx.outputs?.resolve('umapPf')?.getPColumns(),
+  })
 
-export type BlockOutputs = InferOutputsType<typeof model>;
+  .done();
+
+export type BlockOutputs = InferOutputsType<typeof platforma>;
 
 export { getDefaultBlockLabel } from './label';

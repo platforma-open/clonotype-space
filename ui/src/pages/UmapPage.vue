@@ -14,8 +14,7 @@ import strings from '@milaboratories/strings';
 import { useApp } from '../app';
 
 import type { PredefinedGraphOption } from '@milaboratories/graph-maker';
-import { GraphMaker } from '@milaboratories/graph-maker';
-import type { PlSelectionModel } from '@platforma-sdk/model';
+import { GraphMakerPlugin } from '@milaboratories/graph-maker';
 import { asyncComputed } from '@vueuse/core';
 
 import { computed, ref, watch } from 'vue';
@@ -30,15 +29,15 @@ const filteredSequenceOptions = computed(() => {
   const allOptions = app.model.outputs.sequenceOptions;
   if (!allOptions) return undefined;
 
-  const selectedType = app.model.args.sequenceType;
+  const selectedType = app.model.data.sequenceType;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return allOptions.filter((option: any) => option.alphabet === selectedType);
 });
 
 function setAnchorColumn(ref: PlRef | undefined) {
-  app.model.args.inputAnchor = ref;
+  app.model.data.inputAnchor = ref;
   // Reset sequence selection when dataset changes
-  app.model.args.sequencesRef = [];
+  app.model.data.sequencesRef = [];
 }
 
 const defaultOptions = computed((): PredefinedGraphOption<'scatterplot-umap'>[] | null => {
@@ -72,26 +71,21 @@ const isEmpty = asyncComputed(async () => {
   return (await getRawPlatformaInstance().pFrameDriver.getShape(app.model.outputs.umapDim1Table)).rows === 0;
 });
 
-const selection = ref<PlSelectionModel>({
-  axesSpec: [],
-  selectedKeys: [],
-});
-
 const multipleSequenceAlignmentOpen = ref(false);
 const umapLogOpen = ref(false);
 
 // Clear selected sequences when sequence type changes
 watch(
-  () => app.model.args.sequenceType,
+  () => app.model.data.sequenceType,
   () => {
     // Reset selection when sequence type changes
-    app.model.args.sequencesRef = [];
+    app.model.data.sequencesRef = [];
   },
 );
 
 // Validate and auto-select sequences when options change
 watch(
-  () => [app.model.args.inputAnchor, app.model.outputs.sequenceOptions, filteredSequenceOptions.value] as const,
+  () => [app.model.data.inputAnchor, app.model.outputs.sequenceOptions, filteredSequenceOptions.value] as const,
   ([anchor, allOptions, filteredOptions]) => {
     if (!anchor || !allOptions || !filteredOptions || filteredOptions.length === 0) {
       return;
@@ -102,7 +96,7 @@ watch(
     const validValues = new Set(filteredOptions.map((option: any) => option.value));
 
     // Check if current selection contains invalid values (from previous dataset)
-    const currentSelection = app.model.args.sequencesRef;
+    const currentSelection = app.model.data.sequencesRef;
     const hasInvalidValues = currentSelection.some((value: string) => !validValues.has(value));
 
     // Clear selection if it contains invalid values or if it's empty
@@ -112,36 +106,21 @@ watch(
       const mainSequences = filteredOptions.filter((option: any) => option.isMain);
       if (mainSequences.length > 0) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        app.model.args.sequencesRef = mainSequences.map((option: any) => option.value);
+        app.model.data.sequencesRef = mainSequences.map((option: any) => option.value);
       } else {
         // Fallback: if no main sequences found, select the first option
-        app.model.args.sequencesRef = [filteredOptions[0].value];
+        app.model.data.sequencesRef = [filteredOptions[0].value];
       }
     }
   },
   { immediate: true },
 );
-
-// Auto-close settings panel when block starts running
-watch(
-  () => app.model.outputs.isRunning,
-  (isRunning, wasRunning) => {
-    // Close settings when block starts running (false -> true transition)
-    if (isRunning && !wasRunning) {
-      // Close the settings tab by setting currentTab to null
-      app.model.ui.graphStateUMAP.currentTab = null;
-    }
-  },
-);
 </script>
 
 <template>
   <PlBlockPage no-body-gutters>
-    <GraphMaker
-      v-model="app.model.ui.graphStateUMAP"
-      v-model:selection="selection"
-      chartType="scatterplot-umap"
-      :p-frame="app.model.outputs.umapPf"
+    <GraphMakerPlugin
+      :handle="app.plugins.umap.handle"
       :default-options="defaultOptions"
       :status-text="{ noPframe: { title: strings.callToActions.configureSettingsAndRun } }"
     >
@@ -161,7 +140,7 @@ watch(
       </template>
       <template #settingsSlot>
         <PlDropdownRef
-          v-model="app.model.args.inputAnchor"
+          v-model="app.model.data.inputAnchor"
           :options="app.model.outputs.inputOptions"
           label="Select dataset"
           required
@@ -170,22 +149,22 @@ watch(
         />
 
         <PlTextField
-          v-model="app.model.args.customBlockLabel"
+          v-model="app.model.data.customBlockLabel"
           label="Block title"
           :clearable="true"
-          :placeholder="app.model.args.defaultBlockLabel"
+          :placeholder="app.model.data.defaultBlockLabel"
           :style="{ width: '320px' }"
         />
 
         <PlAccordionSection label="UMAP Parameters" :style="{ width: '320px' }">
           <PlBtnGroup
-            v-model="app.model.args.sequenceType"
+            v-model="app.model.data.sequenceType"
             label="Sequence type"
             :options="sequenceType"
             :compact="true"
           />
           <PlDropdownMulti
-            v-model="app.model.args.sequencesRef"
+            v-model="app.model.data.sequencesRef"
             :options="filteredSequenceOptions"
             label="Select sequence column/s for UMAP"
             required
@@ -193,7 +172,7 @@ watch(
 
           <div :style="{ display: 'flex', gap: '8px', width: '320px' }">
             <PlNumberField
-              v-model="app.model.args.umap_neighbors"
+              v-model="app.model.data.umap_neighbors"
               label="Neighbors"
               placeholder="15"
               :min="2"
@@ -216,7 +195,7 @@ watch(
               </template>
             </PlNumberField>
             <PlNumberField
-              v-model="app.model.args.umap_min_dist"
+              v-model="app.model.data.umap_min_dist"
               label="Minimum Distance"
               placeholder="0.5"
               :min="0"
@@ -244,7 +223,7 @@ watch(
         <PlAccordionSection label="Performance Settings" :style="{ width: '320px' }">
           <div :style="{ display: 'flex', gap: '8px', width: '320px' }">
             <PlNumberField
-              v-model="app.model.args.mem"
+              v-model="app.model.data.mem"
               label="Memory (GB)"
               placeholder="64"
               :min="8"
@@ -273,7 +252,7 @@ watch(
             </PlNumberField>
 
             <PlNumberField
-              v-model="app.model.args.cpu"
+              v-model="app.model.data.cpu"
               label="CPU"
               placeholder="8"
               :min="1"
@@ -303,7 +282,7 @@ watch(
           Please choose a different dataset.
         </PlAlert>
       </template>
-    </GraphMaker>
+    </GraphMakerPlugin>
     <PlSlideModal
       v-model="multipleSequenceAlignmentOpen"
       width="100%"
@@ -311,10 +290,9 @@ watch(
     >
       <template #title>{{ strings.titles.multipleSequenceAlignment }}</template>
       <PlMultiSequenceAlignment
-        v-model="app.model.ui.alignmentModel"
+        v-model="app.model.data.alignmentModel"
         :sequence-column-predicate="isSequenceColumn"
         :p-frame="app.model.outputs.msaPf"
-        :selection="selection"
       />
     </PlSlideModal>
     <PlSlideModal v-model="umapLogOpen" width="80%">
