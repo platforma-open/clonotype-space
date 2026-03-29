@@ -7,7 +7,7 @@ import {
   getRawPlatformaInstance,
 } from '@platforma-sdk/model';
 
-import { PlAccordionSection, PlAlert, PlBlockPage, PlBtnGhost, PlBtnGroup, PlDropdownMulti, PlDropdownRef, PlLogView, PlMaskIcon24, PlNumberField, PlSlideModal, PlTextField } from '@platforma-sdk/ui-vue';
+import { PlAccordionSection, PlAlert, PlBlockPage, PlBtnGhost, PlBtnGroup, PlDropdownMulti, PlDropdownRef, PlLogView, PlMaskIcon24, PlNumberField, PlSlideModal, PlTextField, usePlugin } from '@platforma-sdk/ui-vue';
 import { listToOptions } from '@platforma-sdk/ui-vue';
 import { PlMultiSequenceAlignment } from '@milaboratories/multi-sequence-alignment';
 import strings from '@milaboratories/strings';
@@ -83,6 +83,15 @@ watch(
   },
 );
 
+watch(() => app.plugins.umap.publicData.selection, (v) => {
+  console.log('selection', v);
+}, { immediate: true, deep: true });
+
+const pluginInner = usePlugin(app.plugins.umap.handle);
+
+watch(() => pluginInner.model.data.selection, (v) => {
+  console.log('selection plugin inner', v);
+}, { immediate: true, deep: true });
 // Validate and auto-select sequences when options change
 watch(
   () => [app.model.data.inputAnchor, app.model.outputs.sequenceOptions, filteredSequenceOptions.value] as const,
@@ -293,6 +302,7 @@ watch(
         v-model="app.model.data.alignmentModel"
         :sequence-column-predicate="isSequenceColumn"
         :p-frame="app.model.outputs.msaPf"
+        :selection="app.plugins.umap.publicData.selection"
       />
     </PlSlideModal>
     <PlSlideModal v-model="umapLogOpen" width="80%">

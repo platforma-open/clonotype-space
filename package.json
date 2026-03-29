@@ -20,5 +20,12 @@
     "typescript": "catalog:",
     "shx": "catalog:"
   },
+  "pnpm": {
+    "overrides": {
+        "@milaboratories/graph-maker": "/Users/elenaerokhina/projects/mictx/core/visualizations/packages/graph-maker/package.tgz",
+        "@platforma-sdk/model": "/Users/elenaerokhina/projects/mictx/core/platforma/sdk/model/package.tgz",
+        "@platforma-sdk/ui-vue": "/Users/elenaerokhina/projects/mictx/core/platforma/sdk/ui-vue/package.tgz"
+     }
+},
   "packageManager": "pnpm@9.12.0"
 }

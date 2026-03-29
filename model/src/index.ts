@@ -17,7 +17,6 @@ import {
   DataModelBuilder,
   createPFrameForGraphs,
 } from '@platforma-sdk/model';
-import strings from '@milaboratories/strings';
 import { getDefaultBlockLabel } from './label';
 
 // ---------------------------------------------------------------------------
@@ -191,6 +190,8 @@ export const platforma = BlockModelV3.create(dataModel)
       umap_min_dist: data.umap_min_dist,
       cpu: data.cpu,
       mem: data.mem,
+      defaultBlockLabel: data.defaultBlockLabel,
+      customBlockLabel: data.customBlockLabel,
     };
   })
 
@@ -317,12 +318,14 @@ export const platforma = BlockModelV3.create(dataModel)
     );
   })
 
+  .output('isRunning', (ctx) => ctx.outputs?.getIsReadyOrError() === false)
+
   .title(() => 'Clonotype Space')
 
   .subtitle((ctx) => ctx.data.customBlockLabel || ctx.data.defaultBlockLabel)
 
   .sections((_ctx) => ([
-    { type: 'link', href: '/', label: strings.titles.main },
+    { type: 'link', href: '/', label: 'Main' },
   ]))
 
   .plugin(umapPlugin, {

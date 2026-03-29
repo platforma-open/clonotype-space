@@ -3,13 +3,13 @@
   "version": "2.7.1",
   "description": "Block model",
   "type": "module",
-  "main": "dist/index.cjs",
-  "module": "dist/index.js",
+  "main": "./dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
       "sources": "./src/index.ts",
       "import": "./dist/index.js",
+      "default": "./dist/index.js",
       "types": "./dist/index.d.ts"
     },
     "./dist/*": "./dist/*"
@@ -24,8 +24,7 @@
   "dependencies": {
     "@platforma-sdk/model": "catalog:",
     "@milaboratories/graph-maker": "catalog:",
-    "@milaboratories/pf-plots": "catalog:",
-    "@milaboratories/strings": "catalog:"
+    "@milaboratories/pf-plots": "catalog:"
   },
   "devDependencies": {
     "@milaboratories/ts-builder": "catalog:",
