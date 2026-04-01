@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.ui
 
+## 2.8.5
+
+### Patch Changes
+
+- 4f38fcc: update graph-maker
+
 ## 2.8.4
 
 ### Patch Changes
