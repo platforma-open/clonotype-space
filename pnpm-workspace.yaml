@@ -19,7 +19,7 @@ catalog:
   '@platforma-sdk/eslint-config': 1.2.0
   '@platforma-sdk/test': 1.61.1
   '@milaboratories/helpers': 1.14.0
-  '@milaboratories/graph-maker': 1.2.6
+  '@milaboratories/graph-maker': 1.2.7
   '@milaboratories/multi-sequence-alignment': 1.47.5
   '@milaboratories/strings': 0.1.2
 
