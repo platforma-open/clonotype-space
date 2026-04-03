@@ -4,6 +4,7 @@ assets:= import("@platforma-sdk/workflow-tengo:assets")
 smart := import("@platforma-sdk/workflow-tengo:smart")
 ll := import("@platforma-sdk/workflow-tengo:ll")
 render := import("@platforma-sdk/workflow-tengo:render")
+math := import("math")
 
 xsv := import("@platforma-sdk/workflow-tengo:pframes.xsv")
 pframes := import("@platforma-sdk/workflow-tengo:pframes")
@@ -55,10 +56,14 @@ wf.body(func(args) {
 	// output containers
 	outputs := {}
 
+	baseMemGiB := 64
+	if !is_undefined(args.mem) {
+		baseMemGiB = args.mem
+	}
+
 	////////// UMAP //////////
 	// Generate input TSV with Clonotype ID and sequences
 	umapTable := pframes.tsvFileBuilder()
-	umapTable.mem("8GB") // TODO: make this dynamic on input size
 	umapTable.setAxisHeader(datasetSpec.axesSpec[1].name, "clonotypeKey")
 
 	// Add all selected sequences with unique headers
@@ -68,7 +73,7 @@ wf.body(func(args) {
 		umapTable.add(seq, {header: "sequence_" + string(nr)})
 	}
 
-	umapTable.mem("16GiB")
+	umapTable.mem(string(int(math.max(16, baseMemGiB / 4))) + "GiB")
 	umapTable.cpu(1)
 	umapTable = umapTable.build()
 
@@ -93,11 +98,11 @@ wf.body(func(args) {
 	umapPf := xsv.importFile(
 		umapTsVFile,
 		"tsv",
-		umapConv.getColumns(datasetSpec, blockId), 
-		{ 
+		umapConv.getColumns(datasetSpec, blockId),
+		{
 			splitDataAndSpec: true,
 			cpu: 1,
-			mem: "16GiB" // TODO: make this dynamic on input size
+			mem: string(int(math.max(16, baseMemGiB / 4))) + "GiB"
 		})
 
 	traceLabel := args.customBlockLabel || args.defaultBlockLabel
