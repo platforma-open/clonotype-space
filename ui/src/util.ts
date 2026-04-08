@@ -1,19 +1,23 @@
-import type { PColumnIdAndSpec, PColumnSpec } from '@platforma-sdk/model';
-import { type PTableColumnSpec } from '@platforma-sdk/model';
+import type { PColumnPredicate, PColumnSpec } from '@platforma-sdk/model';
+import { type PTableColumnSpec, Annotation, Domain, PAxisName, readAnnotationJson, readDomain } from '@platforma-sdk/model';
 
-export const isSequenceColumn = (column: PColumnIdAndSpec) => {
-  if (!(column.spec.annotations?.['pl7.app/vdj/isAssemblingFeature'] === 'true'))
-    return false;
+export const isSequenceColumn: PColumnPredicate = ({ spec }) => {
+  const isBulkSequence = (spec: PColumnSpec) =>
+    spec.name !== 'pl7.app/vdj/sequenceLength'
+    && spec.name !== 'pl7.app/vdj/sequence/annotation'
+    && readDomain(spec, Domain.Alphabet) === 'aminoacid';
 
-  const isBulkSequence = (column: PColumnSpec) =>
-    column.domain?.['pl7.app/alphabet'] === 'aminoacid';
-  const isSingleCellSequence = (column: PColumnSpec) =>
-    column.domain?.['pl7.app/vdj/scClonotypeChain/index'] === 'primary'
-    && column.domain?.['pl7.app/alphabet'] === 'aminoacid'
-    // && column.axesSpec.length >= 1
-    && column.axesSpec[0].name === 'pl7.app/vdj/scClonotypeKey';
+  const isSingleCellSequence = (spec: PColumnSpec) =>
+    spec.name !== 'pl7.app/vdj/sequenceLength'
+    && spec.name !== 'pl7.app/vdj/sequence/annotation'
+    && readDomain(spec, Domain.VDJ.ScClonotypeChain.Index) === 'primary'
+    && readDomain(spec, Domain.Alphabet) === 'aminoacid'
+    && spec.axesSpec[0].name === PAxisName.VDJ.ScClonotypeKey;
 
-  return isBulkSequence(column.spec) || isSingleCellSequence(column.spec);
+  return (isBulkSequence(spec) || isSingleCellSequence(spec))
+    && {
+      default: readAnnotationJson(spec, Annotation.VDJ.IsAssemblingFeature) ?? false,
+    };
 };
 
 export function defaultFilters(tSpec: PTableColumnSpec): (unknown | undefined) {
