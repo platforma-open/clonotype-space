@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.ui
 
+## 2.8.7
+
+### Patch Changes
+
+- e6befc4: Allow to select all sequences in MSA
+
 ## 2.8.6
 
 ### Patch Changes
