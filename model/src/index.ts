@@ -73,11 +73,10 @@ export type BlockData = {
 // Plugin instances
 // ---------------------------------------------------------------------------
 
-const umapPlugin = graphMakerPlugin.create({
+const umapPlugin = graphMakerPlugin('scatterplot-umap').create({
   pluginId: 'umap',
   transferAt: 'v1',
   config: {
-    chartType: 'scatterplot-umap',
     initialTitle: 'Clonotype Space UMAP',
     initialTemplate: 'dots',
     initialState: {
@@ -112,11 +111,7 @@ const dataModel = new DataModelBuilder()
   }))
   .transfer(umapPlugin, (v1) => ({
     state: v1.graphStateUMAP,
-    selection: undefined,
     chartType: 'scatterplot-umap' as const,
-    readonlyInputs: [],
-    allowChartDeleting: false,
-    allowTitleEditing: false,
   }))
   .migrate<BlockData>('v2', ({ graphStateUMAP: _, ...rest }) => rest)
   .init(() => ({

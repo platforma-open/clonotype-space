@@ -23,8 +23,7 @@
   },
   "dependencies": {
     "@platforma-sdk/model": "catalog:",
-    "@milaboratories/graph-maker": "catalog:",
-    "@milaboratories/pf-plots": "catalog:"
+    "@milaboratories/graph-maker": "catalog:"
   },
   "devDependencies": {
     "@milaboratories/ts-builder": "catalog:",

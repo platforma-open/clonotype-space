@@ -1,22 +1,14 @@
 <script setup lang="ts">
-import type {
-  PColumnIdAndSpec,
-  PlRef,
-} from '@platforma-sdk/model';
-import {
-  getRawPlatformaInstance,
-} from '@platforma-sdk/model';
-
-import { PlAccordionSection, PlAlert, PlBlockPage, PlBtnGhost, PlBtnGroup, PlDropdownMulti, PlDropdownRef, PlLogView, PlMaskIcon24, PlNumberField, PlSlideModal, PlTextField, usePlugin } from '@platforma-sdk/ui-vue';
+import type { PColumnIdAndSpec, PlRef } from '@platforma-sdk/model';
+import { getRawPlatformaInstance } from '@platforma-sdk/model';
+import { PlAccordionSection, PlAlert, PlBlockPage, PlBtnGhost, PlBtnGroup, PlDropdownMulti, PlDropdownRef, PlLogView, PlMaskIcon24, PlNumberField, PlSlideModal, PlTextField } from '@platforma-sdk/ui-vue';
 import { listToOptions } from '@platforma-sdk/ui-vue';
 import { PlMultiSequenceAlignment } from '@milaboratories/multi-sequence-alignment';
 import strings from '@milaboratories/strings';
 import { useApp } from '../app';
-
-import type { PredefinedGraphOption } from '@milaboratories/graph-maker';
 import { GraphMakerPlugin } from '@milaboratories/graph-maker';
 import { asyncComputed } from '@vueuse/core';
-
+import type { PlSelectionModel } from '@platforma-sdk/model';
 import { computed, ref, watch } from 'vue';
 import { isSequenceColumn } from '../util';
 
@@ -40,7 +32,7 @@ function setAnchorColumn(ref: PlRef | undefined) {
   app.model.data.sequencesRef = [];
 }
 
-const defaultOptions = computed((): PredefinedGraphOption<'scatterplot-umap'>[] | null => {
+const defaultOptions = computed(() => {
   if (!app.model.outputs.umapPcols)
     return null;
 
@@ -50,19 +42,18 @@ const defaultOptions = computed((): PredefinedGraphOption<'scatterplot-umap'>[] 
     ));
   }
 
-  const defaults: PredefinedGraphOption<'scatterplot-umap'>[] = [
+  return [
     {
-      inputName: 'x',
+      inputName: 'x' as const,
       selectedSource: umapPcols[getIndex('pl7.app/vdj/umap1',
         umapPcols)].spec,
     },
     {
-      inputName: 'y',
+      inputName: 'y' as const,
       selectedSource: umapPcols[getIndex('pl7.app/vdj/umap2',
         umapPcols)].spec,
     },
   ];
-  return defaults;
 });
 
 // Check if the UMAP file is empty
@@ -71,6 +62,7 @@ const isEmpty = asyncComputed(async () => {
   return (await getRawPlatformaInstance().pFrameDriver.getShape(app.model.outputs.umapDim1Table)).rows === 0;
 });
 
+const selection = ref<PlSelectionModel | undefined>(undefined);
 const multipleSequenceAlignmentOpen = ref(false);
 const umapLogOpen = ref(false);
 
@@ -83,15 +75,6 @@ watch(
   },
 );
 
-watch(() => app.plugins.umap.publicData.selection, (v) => {
-  console.log('selection', v);
-}, { immediate: true, deep: true });
-
-const pluginInner = usePlugin(app.plugins.umap.handle);
-
-watch(() => pluginInner.model.data.selection, (v) => {
-  console.log('selection plugin inner', v);
-}, { immediate: true, deep: true });
 // Validate and auto-select sequences when options change
 watch(
   () => [app.model.data.inputAnchor, app.model.outputs.sequenceOptions, filteredSequenceOptions.value] as const,
@@ -129,6 +112,7 @@ watch(
 <template>
   <PlBlockPage no-body-gutters>
     <GraphMakerPlugin
+      v-model:selection="selection"
       :handle="app.plugins.umap.handle"
       :default-options="defaultOptions"
       :status-text="{ noPframe: { title: strings.callToActions.configureSettingsAndRun } }"
@@ -302,7 +286,7 @@ watch(
         v-model="app.model.data.alignmentModel"
         :sequence-column-predicate="isSequenceColumn"
         :p-frame="app.model.outputs.msaPf"
-        :selection="app.plugins.umap.publicData.selection"
+        :selection="selection"
       />
     </PlSlideModal>
     <PlSlideModal v-model="umapLogOpen" width="80%">
