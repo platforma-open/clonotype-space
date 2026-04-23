@@ -1,5 +1,13 @@
 # @platforma-open/milaboratories.clonotype-space
 
+## 2.5.9
+
+### Patch Changes
+
+- b327178: Fix linker discovery by graph-maker update
+- Updated dependencies [b327178]
+  - @platforma-open/milaboratories.clonotype-space.ui@2.8.8
+
 ## 2.5.8
 
 ### Patch Changes
