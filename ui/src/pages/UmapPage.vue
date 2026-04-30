@@ -54,12 +54,12 @@ const defaultOptions = computed((): PredefinedGraphOption<'scatterplot-umap'>[] 
   const defaults: PredefinedGraphOption<'scatterplot-umap'>[] = [
     {
       inputName: 'x',
-      selectedSource: umapPcols[getIndex('pl7.app/vdj/umap1',
+      selectedSource: umapPcols[getIndex('pl7.app/umap1',
         umapPcols)].spec,
     },
     {
       inputName: 'y',
-      selectedSource: umapPcols[getIndex('pl7.app/vdj/umap2',
+      selectedSource: umapPcols[getIndex('pl7.app/umap2',
         umapPcols)].spec,
     },
   ];

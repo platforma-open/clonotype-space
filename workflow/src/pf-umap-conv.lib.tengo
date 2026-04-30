@@ -14,10 +14,10 @@ getColumns := func(datasetSpec, blockId) {
         id: "umap1",
         allowNA: true,
         spec: {
-          name: "pl7.app/vdj/umap1",
+          name: "pl7.app/umap1",
           valueType: "Double",
           domain: {
-            "pl7.app/vdj/umap/blockId": blockId
+            "pl7.app/umap/blockId": blockId
           },
           annotations: {
             "pl7.app/label": "UMAP Dim1",
@@ -31,10 +31,10 @@ getColumns := func(datasetSpec, blockId) {
         id: "umap2",
         allowNA: true,
         spec: {
-          name: "pl7.app/vdj/umap2",
+          name: "pl7.app/umap2",
           valueType: "Double",
           domain: {
-            "pl7.app/vdj/umap/blockId": blockId
+            "pl7.app/umap/blockId": blockId
           },
           annotations: {
             "pl7.app/label": "UMAP Dim2",

@@ -251,7 +251,7 @@ export const model = BlockModel.create()
     if (pCols === undefined) {
       return undefined;
     }
-    const dim1Column = pCols.find((p) => p.spec.name === 'pl7.app/vdj/umap1');
+    const dim1Column = pCols.find((p) => p.spec.name === 'pl7.app/umap1');
     if (dim1Column === undefined) {
       return undefined;
     }
