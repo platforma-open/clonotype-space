@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.model
 
+## 3.0.0
+
+### Major Changes
+
+- f4731cf: Support peptides
+
 ## 2.7.1
 
 ### Patch Changes
