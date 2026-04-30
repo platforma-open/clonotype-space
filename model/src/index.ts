@@ -85,7 +85,7 @@ export const model = BlockModel.create()
 
   .withUiState<UiState>({
     graphStateUMAP: {
-      title: 'Clonotype Space UMAP',
+      title: 'Sequence Space UMAP',
       template: 'dots',
       currentTab: 'settings',
       layersSettings: {
