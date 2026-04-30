@@ -85,7 +85,7 @@ export const model = BlockModel.create()
 
   .withUiState<UiState>({
     graphStateUMAP: {
-      title: 'Clonotype Space UMAP',
+      title: 'Sequence Space UMAP',
       template: 'dots',
       currentTab: 'settings',
       layersSettings: {
@@ -119,37 +119,70 @@ export const model = BlockModel.create()
         { name: 'pl7.app/vdj/scClonotypeKey' },
       ],
       annotations: { 'pl7.app/isAnchor': 'true' },
+    }, {
+      axes: [
+        { name: 'pl7.app/sampleId' },
+        { name: 'pl7.app/variantKey' },
+      ],
+      annotations: { 'pl7.app/isAnchor': 'true' },
     }]),
   )
+
+  .output('modality', (ctx) => {
+    const spec = ctx.args.inputAnchor
+      ? ctx.resultPool.getPColumnSpecByRef(ctx.args.inputAnchor)
+      : undefined;
+    if (!spec) return undefined;
+    for (const ax of spec.axesSpec) {
+      if (ax.name === 'pl7.app/variantKey') return 'peptide';
+      if (ax.name === 'pl7.app/vdj/clonotypeKey' || ax.name === 'pl7.app/vdj/scClonotypeKey') return 'antibody_tcr';
+    }
+    return 'antibody_tcr';
+  }, { retentive: true })
 
   .output('sequenceOptions', (ctx) => {
     const ref = ctx.args.inputAnchor;
     if (ref === undefined) return undefined;
 
-    const isSingleCell = ctx.resultPool.getPColumnSpecByRef(ref)?.axesSpec[1].name === 'pl7.app/vdj/scClonotypeKey';
+    const axis1Name = ctx.resultPool.getPColumnSpecByRef(ref)?.axesSpec[1].name;
+    const inputKind: 'peptide' | 'singleCell' | 'bulk'
+      = axis1Name === 'pl7.app/variantKey'
+        ? 'peptide'
+        : axis1Name === 'pl7.app/vdj/scClonotypeKey'
+          ? 'singleCell'
+          : 'bulk';
 
     const sequenceMatchers = [];
 
-    if (isSingleCell) {
-      // Single-cell: get per-chain sequences (all types)
-      sequenceMatchers.push({
-        axes: [{ anchor: 'main', idx: 1 }],
-        name: 'pl7.app/vdj/sequence',
-        domain: {
-          'pl7.app/vdj/scClonotypeChain/index': 'primary',
-        },
-      });
-      // Single-cell: include scFv construct sequences
-      sequenceMatchers.push({
-        axes: [{ anchor: 'main', idx: 1 }],
-        name: 'pl7.app/vdj/scFv-sequence',
-      });
-    } else {
-      // Bulk: get regular sequences (all types)
-      sequenceMatchers.push({
-        axes: [{ anchor: 'main', idx: 1 }],
-        name: 'pl7.app/vdj/sequence',
-      });
+    switch (inputKind) {
+      case 'peptide':
+        // Peptide: peptide-extraction emits both nt and aa sequences with
+        // name 'pl7.app/sequence' and domain.pl7.app/feature: 'peptide'.
+        sequenceMatchers.push({
+          axes: [{ anchor: 'main', idx: 1 }],
+          name: 'pl7.app/sequence',
+          domain: { 'pl7.app/feature': 'peptide' },
+        });
+        break;
+      case 'singleCell':
+        // Single-cell: per-chain sequences (primary chain) + scFv construct
+        sequenceMatchers.push({
+          axes: [{ anchor: 'main', idx: 1 }],
+          name: 'pl7.app/vdj/sequence',
+          domain: { 'pl7.app/vdj/scClonotypeChain/index': 'primary' },
+        });
+        sequenceMatchers.push({
+          axes: [{ anchor: 'main', idx: 1 }],
+          name: 'pl7.app/vdj/scFv-sequence',
+        });
+        break;
+      case 'bulk':
+        // Bulk: regular VDJ sequences (all features × alphabets)
+        sequenceMatchers.push({
+          axes: [{ anchor: 'main', idx: 1 }],
+          name: 'pl7.app/vdj/sequence',
+        });
+        break;
     }
 
     const options = ctx.resultPool.getCanonicalOptions(
@@ -170,7 +203,11 @@ export const model = BlockModel.create()
       const columns = ctx.resultPool.getAnchoredPColumns({ main: ref }, [colId]);
       const spec = columns?.[0]?.spec;
       const alphabet = spec?.domain?.['pl7.app/alphabet'] as 'aminoacid' | 'nucleotide' | undefined;
-      const isMain = spec?.annotations?.['pl7.app/vdj/isMainSequence'] === 'true';
+      // Read both annotation forms: VDJ uses 'pl7.app/vdj/isMainSequence',
+      // peptide-extraction uses the modality-neutral 'pl7.app/isMainSequence'.
+      const isMain
+        = spec?.annotations?.['pl7.app/vdj/isMainSequence'] === 'true'
+          || spec?.annotations?.['pl7.app/isMainSequence'] === 'true';
 
       return {
         label: option.label,
@@ -214,7 +251,7 @@ export const model = BlockModel.create()
     if (pCols === undefined) {
       return undefined;
     }
-    const dim1Column = pCols.find((p) => p.spec.name === 'pl7.app/vdj/umap1');
+    const dim1Column = pCols.find((p) => p.spec.name === 'pl7.app/umap1');
     if (dim1Column === undefined) {
       return undefined;
     }
@@ -240,7 +277,7 @@ export const model = BlockModel.create()
 
   .output('isRunning', (ctx) => ctx.outputs?.getIsReadyOrError() === false)
 
-  .title(() => 'Clonotype Space')
+  .title(() => 'Sequence Space')
 
   .subtitle((ctx) => ctx.args.customBlockLabel || ctx.args.defaultBlockLabel)
 

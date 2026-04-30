@@ -5,7 +5,11 @@ export const isSequenceColumn: PColumnPredicate = ({ spec }) => {
   const isBulkSequence = (spec: PColumnSpec) =>
     spec.name !== 'pl7.app/vdj/sequenceLength'
     && spec.name !== 'pl7.app/vdj/sequence/annotation'
-    && readDomain(spec, Domain.Alphabet) === 'aminoacid';
+    && readDomain(spec, Domain.Alphabet) === 'aminoacid'
+    // Peptide specific
+    && spec.name !== 'pl7.app/sequenceLength'
+    // Reject cluster-centroid sequences
+    && spec.axesSpec[0]?.name !== 'pl7.app/clusterId';
 
   const isSingleCellSequence = (spec: PColumnSpec) =>
     spec.name !== 'pl7.app/vdj/sequenceLength'
@@ -16,7 +20,11 @@ export const isSequenceColumn: PColumnPredicate = ({ spec }) => {
 
   return (isBulkSequence(spec) || isSingleCellSequence(spec))
     && {
-      default: readAnnotationJson(spec, Annotation.VDJ.IsAssemblingFeature) ?? false,
+      // VDJ uses 'pl7.app/vdj/isAssemblingFeature'; peptide-extraction emits
+      // the modality-neutral 'pl7.app/isAssemblingFeature' (no `vdj/` prefix).
+      default: readAnnotationJson(spec, Annotation.VDJ.IsAssemblingFeature)
+        ?? readAnnotationJson(spec, 'pl7.app/isAssemblingFeature' as never)
+        ?? false,
     };
 };
 

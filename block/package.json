@@ -4,7 +4,7 @@
   "scripts": {
     "build": "shx rm -rf ./block-pack && block-tools pack",
     "mark-stable": "block-tools mark-stable -r 's3://milab-euce1-prod-pkgs-s3-block-registry/pub/releases/?region=eu-central-1'",
-    "prepublishOnly": "block-tools pack && block-tools publish -r 's3://milab-euce1-prod-pkgs-s3-block-registry/pub/releases/?region=eu-central-1'",
+    "prepublishOnly": "block-tools pack && block-tools publish --unstable -r 's3://milab-euce1-prod-pkgs-s3-block-registry/pub/releases/?region=eu-central-1'",
     "do-pack": "shx rm -f *.tgz && block-tools pack && pnpm pack && shx mv *.tgz package.tgz"
   },
   "files": [
@@ -24,16 +24,17 @@
       "ui": "@platforma-open/milaboratories.clonotype-space.ui/dist"
     },
     "meta": {
-      "title": "Clonotype Space",
+      "title": "Sequence Space",
       "logo": "file:../logos/block-logo.png",
       "url": "https://github.com/platforma-open/clonotype-space",
       "support": "mailto:support@milaboratories.com",
-      "description": "Visualize clonotype relationships using k-mer-based dimensionality reduction and UMAP projection.",
+      "description": "Visualize sequence relationships (clonotypes or peptides) using k-mer-based dimensionality reduction and UMAP projection.",
       "longDescription": "file:../docs/description.md",
       "changelog": "file:../CHANGELOG.md",
       "tags": [
         "airr",
-        "downstream"
+        "downstream",
+        "peptide"
       ],
       "organization": {
         "name": "MiLaboratories Inc",
