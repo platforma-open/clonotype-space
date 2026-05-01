@@ -3,6 +3,7 @@
 self := import("@platforma-sdk/workflow-tengo:tpl")
 exec := import("@platforma-sdk/workflow-tengo:exec")
 assets := import("@platforma-sdk/workflow-tengo:assets")
+feats := import("@platforma-sdk/workflow-tengo:feats")
 
 self.defineOutputs("umapTsVFile", "umapOutput")
 
@@ -24,10 +25,19 @@ self.body(func(args) {
     // UMAP software execution
     // Note: --seq-col-start "sequence" will match all columns starting with "sequence"
     // (sequence.TRA, sequence.TRB, sequence_0, etc.)
-    umapClones := exec.builder().
+    builder := exec.builder().
         software(assets.importSoftware("@platforma-open/milaboratories.clonotype-space.umap:main")).
         mem(string(mem) + "GiB").
-        cpu(cpu).
+        cpu(cpu)
+
+    // Request GPU only when the backend reports one. .gpuMemory() against a
+    // backend without GPU is a hard error, so we MUST gate with feats.hasGpu.
+    // The umap software falls back to sklearn on CPU when --umap-backend=auto.
+    if feats.hasGpu {
+        builder = builder.gpuMemory("16GiB")
+    }
+
+    umapClones := builder.
         addFile("sequences.tsv", umapTable).
         arg("-i").arg("sequences.tsv").
         arg("-c").arg("sequence").
