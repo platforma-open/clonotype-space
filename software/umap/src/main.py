@@ -452,7 +452,9 @@ def compute_svd_embedding(matrix, svd_backend='auto', target_variance=0.95, max_
             svd_model, _ = create_svd_model('sklearn', n_components_optimal, random_state=42)
             svd_embed = svd_model.fit_transform(matrix)
         else:
-            svd_embed = svd_cpu_model.fit_transform(matrix)
+            # Model was already fit in fallback_to_cpu_svd; reuse it via transform()
+            # instead of fit_transform() to avoid recomputing the full SVD.
+            svd_embed = svd_cpu_model.transform(matrix)
             svd_model = svd_cpu_model
         explained_var_sum = sum(svd_model.explained_variance_ratio_)
         svd_transformer = _SVDTransformer(svd_model.components_)
