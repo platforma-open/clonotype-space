@@ -428,18 +428,21 @@ def compute_svd_embedding(matrix, svd_backend='auto', target_variance=0.95, max_
     if use_cupy_sparse_svd and matrix_gpu is not None:
         try:
             import cupy as cp
-            if n_components_optimal < n_components_max:
-                print(f"Recomputing GPU sparse SVD with {n_components_optimal} components...")
-                svd_u, svd_s, svd_vt = run_cupy_sparse_svd(matrix_gpu, n_components_optimal)
-            else:
-                print(f"Reusing GPU sparse SVD results with {n_components_max} components.")
+            # Slice the already-computed SVD down to n_components_optimal instead
+            # of recomputing. The top-k truncation of a rank-m SVD is the first k
+            # components, so this avoids a second SVD pass on the GPU. Mirrors
+            # the CPU path's behavior.
+            svd_u = svd_u[:, :n_components_optimal]
+            svd_s = svd_s[:n_components_optimal]
+            svd_vt = svd_vt[:n_components_optimal, :]
+            print(f"Using top {n_components_optimal} components from GPU sparse SVD.")
             svd_embed = cp.asnumpy(svd_u @ cp.diag(svd_s))
             explained_variance_ratio_final = compute_explained_variance_cupy(
                 svd_s, matrix_gpu, matrix.shape[0]
             )
             explained_var_sum = sum(explained_variance_ratio_final)
             # Store VT as numpy for CPU-side transform calls
-            svd_transformer = _SVDTransformer(cp.asnumpy(svd_vt[:n_components_optimal]))
+            svd_transformer = _SVDTransformer(cp.asnumpy(svd_vt))
             print("GPU sparse SVD embedding computed successfully.")
         except (MemoryError, Exception) as e:
             print(f"Warning: GPU SVD transform failed: {e}")
