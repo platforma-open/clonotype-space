@@ -551,8 +551,8 @@ def validate_args(args):
     if args.umap_neighbors < 1:
         print("Error: UMAP neighbors must be at least 1")
         sys.exit(1)
-    if args.umap_min_dist < 0:
-        print("Error: UMAP min_dist must be non-negative")
+    if not (0 <= args.umap_min_dist <= 1):
+        print("Error: UMAP min_dist must be between 0 and 1")
         sys.exit(1)
     if args.k_mer_size is not None and args.k_mer_size < 1:
         print("Error: k-mer size must be at least 1")
