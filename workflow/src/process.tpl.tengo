@@ -1,0 +1,96 @@
+// Inner processing template for clonotype-space.
+//
+// Awaits only the PColumnBundle specs (not data), so the body runs — and the output
+// PFrame's specs are published — before upstream column data is computed. The data
+// pipeline (TSV build → UMAP exec → xsv import) is deferred and resolves when its
+// inputs become available.
+
+self := import("@platforma-sdk/workflow-tengo:tpl")
+assets := import("@platforma-sdk/workflow-tengo:assets")
+ll := import("@platforma-sdk/workflow-tengo:ll")
+render := import("@platforma-sdk/workflow-tengo:render")
+pframes := import("@platforma-sdk/workflow-tengo:pframes")
+pSpec := import("@platforma-sdk/workflow-tengo:pframes.spec")
+xsv := import("@platforma-sdk/workflow-tengo:pframes.xsv")
+umapConv := import(":pf-umap-conv")
+
+umapCalculationTpl := assets.importTemplate(":umap-calculation")
+
+// Await only column specs — NOT data. This is what enables early spec export.
+self.awaitState("columns", "PColumnBundle")
+
+self.body(func(inputs) {
+	columns := inputs.columns
+	blockId := inputs.blockId
+	inputAnchor := inputs.inputAnchor
+	sequencesRef := inputs.sequencesRef
+	alphabet := inputs.sequenceType
+	umap_neighbors := inputs.umap_neighbors
+	umap_min_dist := inputs.umap_min_dist
+	customBlockLabel := inputs.customBlockLabel
+	defaultBlockLabel := inputs.defaultBlockLabel
+	mem := inputs.mem
+	cpu := inputs.cpu
+
+	if is_undefined(umap_neighbors) || is_undefined(umap_min_dist) {
+		ll.panic("umap_neighbors or umap_min_dist is undefined")
+	}
+
+	// Spec is plain JSON, available now (PColumnBundle await covered specs).
+	datasetSpec := columns.getSpec(inputAnchor)
+
+	// Build input TSV with clonotype id and selected sequence columns.
+	// Column data is a deferred reference here — the TSV builder consumes it lazily.
+	umapTable := pframes.tsvFileBuilder()
+	umapTable.setAxisHeader(datasetSpec.axesSpec[1].name, "clonotypeKey")
+	for nr, seqRef in sequencesRef {
+		seq := columns.getColumn(seqRef)
+		umapTable.add(seq, {header: "sequence_" + string(nr)})
+	}
+	umapTable.mem("16GiB") // TODO: make this dynamic on input size
+	umapTable.cpu(1)
+	umapTable = umapTable.build()
+
+	// Run the UMAP exec template (deferred — its inputs await the TSV above).
+	umapRender := render.create(umapCalculationTpl, {
+		umapTable: umapTable,
+		umap_neighbors: umap_neighbors,
+		umap_min_dist: umap_min_dist,
+		alphabet: alphabet,
+		mem: mem,
+		cpu: cpu
+	})
+	umapTsVFile := umapRender.output("umapTsVFile")
+	umapOutput := umapRender.output("umapOutput")
+
+	// Import UMAP results to PFrame. `splitDataAndSpec: true` gives us specs (immediate
+	// JSON, derived from the import config) and deferred data references.
+	umapPf := xsv.importFile(
+		umapTsVFile,
+		"tsv",
+		umapConv.getColumns(datasetSpec, blockId),
+		{
+			splitDataAndSpec: true,
+			cpu: 1,
+			mem: "16GiB" // TODO: make this dynamic on input size
+		})
+
+	traceLabel := customBlockLabel || defaultBlockLabel
+	trace := pSpec.makeTrace(datasetSpec, {
+		type: "milaboratories.clonotype-space",
+		importance: 20,
+		label: traceLabel
+	})
+
+	// Assemble the PFrame: specs (immediate) + data (deferred refs).
+	pfBuilder := pframes.pFrameBuilder()
+	for k, v in umapPf {
+		pfBuilder.add(k, trace.inject(v.spec), v.data)
+	}
+	pf := pfBuilder.build()
+
+	return {
+		pf: pf,
+		umapOutput: umapOutput
+	}
+})
