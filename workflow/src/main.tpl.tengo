@@ -1,128 +1,55 @@
-wf := import("@platforma-sdk/workflow-tengo:workflow")
-exec := import("@platforma-sdk/workflow-tengo:exec")
-assets:= import("@platforma-sdk/workflow-tengo:assets")
-smart := import("@platforma-sdk/workflow-tengo:smart")
-ll := import("@platforma-sdk/workflow-tengo:ll")
-render := import("@platforma-sdk/workflow-tengo:render")
+// Clonotype space workflow.
+//
+// The outer body runs immediately (no `wf.prepare`) so that exports — and therefore
+// output specs — are defined as soon as possible. The inner `process` template awaits
+// only the PColumnBundle's specs (not its data), enabling early spec export to the
+// result pool. Downstream blocks can configure their inputs while UMAP is still
+// computing.
 
-xsv := import("@platforma-sdk/workflow-tengo:pframes.xsv")
+wf := import("@platforma-sdk/workflow-tengo:workflow")
+assets := import("@platforma-sdk/workflow-tengo:assets")
+render := import("@platforma-sdk/workflow-tengo:render")
 pframes := import("@platforma-sdk/workflow-tengo:pframes")
 
-slices := import("@platforma-sdk/workflow-tengo:slices")
-text := import("text")
-umapConv := import(":pf-umap-conv")
+processTpl := assets.importTemplate(":process")
 
-pSpec := import("@platforma-sdk/workflow-tengo:pframes.spec")
-umapCalculationTpl := assets.importTemplate(":umap-calculation")
-
-wf.prepare(func(args){
-	// We need a table with clonotype id and selected sequence columns
-
+wf.body(func(args) {
+	// Build PColumn bundle (deferred — resolves asynchronously).
 	bundleBuilder := wf.createPBundleBuilder()
-	bundleBuilder.ignoreMissingDomains() // to make query work for both bulk and single cell data
+	bundleBuilder.ignoreMissingDomains() // make query work for both bulk and single cell data
 	bundleBuilder.addAnchor("main", args.inputAnchor)
 
-	// Add user-selected sequence features
 	for ref in args.sequencesRef {
 		bundleBuilder.addSingle(ref)
 	}
 
-	return {
-		columns: bundleBuilder.build()
-	}
-})
+	columns := bundleBuilder.build()
 
-wf.body(func(args) {
-
-	blockId := wf.blockId().getDataAsJson()
-
-	// Input arguments
-	columns := args.columns
-	datasetSpec := columns.getSpec(args.inputAnchor)
-	umap_neighbors := args.umap_neighbors
-	umap_min_dist := args.umap_min_dist
-
-	if is_undefined(umap_neighbors) || is_undefined(umap_min_dist) {
-		ll.panic("umap_neighbors or umap_min_dist is undefined")
-	}
-
-	// Get alphabet from args (all selected sequences must have same alphabet)
-	alphabet := args.sequenceType
-
-	// Needed conditional variables
-	isSingleCell := datasetSpec.axesSpec[1].name == "pl7.app/vdj/scClonotypeKey"
-
-	// output containers
-	outputs := {}
-
-	////////// UMAP //////////
-	// Generate input TSV with Clonotype ID and sequences
-	umapTable := pframes.tsvFileBuilder()
-	umapTable.mem("8GB") // TODO: make this dynamic on input size
-	umapTable.setAxisHeader(datasetSpec.axesSpec[1].name, "clonotypeKey")
-
-	// Add all selected sequences with unique headers
-	for nr, seqRef in args.sequencesRef {
-		seq := columns.getColumn(seqRef)
-		// Use sequence number to ensure uniqueness
-		umapTable.add(seq, {header: "sequence_" + string(nr)})
-	}
-
-	umapTable.mem("16GiB")
-	umapTable.cpu(1)
-	umapTable = umapTable.build()
-
-	mem := args.mem
-	cpu := args.cpu
-
-	// Call UMAP calculation subtemplate
-	umapRender := render.create(umapCalculationTpl, {
-		umapTable: umapTable,
-		umap_neighbors: umap_neighbors,
-		umap_min_dist: umap_min_dist,
-		alphabet: alphabet,
-		mem: mem,
-		cpu: cpu
+	// Delegate to the inner template. Its body runs as soon as upstream specs are
+	// available — does not wait for upstream data.
+	processResult := render.createEphemeral(processTpl, {
+		columns: columns,
+		blockId: wf.blockId().getDataAsJson(),
+		inputAnchor: args.inputAnchor,
+		sequencesRef: args.sequencesRef,
+		sequenceType: args.sequenceType,
+		umap_neighbors: args.umap_neighbors,
+		umap_min_dist: args.umap_min_dist,
+		customBlockLabel: args.customBlockLabel,
+		defaultBlockLabel: args.defaultBlockLabel,
+		mem: args.mem,
+		cpu: args.cpu
 	})
 
-	// Get UMAP file and stdout stream from subtemplate
-	umapTsVFile := umapRender.output("umapTsVFile")
-	umapOutput := umapRender.output("umapOutput")
-
-	// Import UMAP results to PFrame
-	umapPf := xsv.importFile(
-		umapTsVFile,
-		"tsv",
-		umapConv.getColumns(datasetSpec, blockId), 
-		{ 
-			splitDataAndSpec: true,
-			cpu: 1,
-			mem: "16GiB" // TODO: make this dynamic on input size
-		})
-
-	traceLabel := args.customBlockLabel || args.defaultBlockLabel
-	trace := pSpec.makeTrace(datasetSpec,
-		{
-			type: "milaboratories.clonotype-space",
-			importance: 20,
-			label: traceLabel
-		})
-
-	pf := pframes.pFrameBuilder()
-	for k, v in umapPf {
-		pf.add(k, trace.inject(v.spec), v.data)
-	}
-		
-	// Build the final PFrame
-	pf = pf.build()
+	pfRef := processResult.output("pf")
 
 	return {
 		outputs: {
-			umapPf: pframes.exportFrame(pf),
-			umapOutput: umapOutput
+			umapPf: pframes.exportFrame(pfRef),
+			umapOutput: processResult.output("umapOutput")
 		},
 		exports: {
-			umapPf: pf
+			umapPf: pfRef
 		}
 	}
 })
