@@ -448,16 +448,18 @@ def compute_svd_embedding(matrix, svd_backend='auto', target_variance=0.95, max_
             explained_var_sum = sum(svd_model.explained_variance_ratio_)
             svd_transformer = _SVDTransformer(svd_model.components_)
     else:
-        if n_components_optimal < n_components_max or svd_cpu_model is None:
-            svd_model, _ = create_svd_model('sklearn', n_components_optimal, random_state=42)
-            svd_embed = svd_model.fit_transform(matrix)
-        else:
-            # Model was already fit in fallback_to_cpu_svd; reuse it via transform()
-            # instead of fit_transform() to avoid recomputing the full SVD.
-            svd_embed = svd_cpu_model.transform(matrix)
-            svd_model = svd_cpu_model
-        explained_var_sum = sum(svd_model.explained_variance_ratio_)
-        svd_transformer = _SVDTransformer(svd_model.components_)
+        # svd_cpu_model was already fit with n_components_max components in
+        # fallback_to_cpu_svd. The rank-k truncation of a rank-m SVD (m >= k) is
+        # the first k components, so slicing avoids recomputing the SVD. For
+        # sklearn's randomized solver this is not bitwise identical to a fresh
+        # k-component fit but yields equally good (or better, due to higher
+        # oversampling) top components.
+        components = svd_cpu_model.components_[:n_components_optimal]
+        svd_transformer = _SVDTransformer(components)
+        svd_embed = svd_transformer.transform(matrix)
+        explained_var_sum = float(
+            svd_cpu_model.explained_variance_ratio_[:n_components_optimal].sum()
+        )
 
     print(f"Explained variance by {n_components_optimal} components: {explained_var_sum:.3f}")
 
