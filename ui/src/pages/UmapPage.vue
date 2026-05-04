@@ -296,6 +296,35 @@ watch(
               </template>
             </PlNumberField>
           </div>
+          <div :style="{ display: 'flex', gap: '8px', width: '320px', marginTop: '8px' }">
+            <PlNumberField
+              v-model="app.model.args.gpuMemory"
+              label="GPU memory (GB)"
+              placeholder="16"
+              :min="1"
+              :max="192"
+              :step="1"
+              required
+              :validate="(value) => value === undefined ? 'GPU memory is required' : undefined"
+              :style="{ flex: 1 }"
+            >
+              <template #tooltip>
+                <div>
+                  <strong>GPU Memory for UMAP Calculation</strong><br>
+                  Set the amount of GPU memory (in GB) to request when a GPU is available on the backend.
+                  When the backend reports no GPU, this value is ignored and the calculation runs on CPU
+                  (sklearn UMAP backend).<br><br>
+                  <strong>Default:</strong> 16 GB<br><br>
+                  <strong>Recommended:</strong><br>
+                  • Small datasets (&lt; 10k clonotypes): <strong>3-6 GB</strong><br>
+                  • Medium datasets (10k - 100k): <strong>12-24 GB</strong><br>
+                  • Large datasets (&gt; 100k): <strong>24-48 GB</strong><br><br>
+                  Larger requests route to bigger GPU instances. On AWS the cluster has tiers at
+                  3, 6, 12, 24, 48 and 192 GiB VRAM — your request lands on the smallest tier that fits.
+                </div>
+              </template>
+            </PlNumberField>
+          </div>
         </PlAccordionSection>
         <PlAlert v-if="isEmpty === true" type="warn" :style="{ width: '320px' }">
           <template #title>Empty dataset selection</template>

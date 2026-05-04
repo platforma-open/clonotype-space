@@ -15,6 +15,7 @@ self.body(func(args) {
     alphabet := args.alphabet
     mem := args.mem
     cpu := args.cpu
+    gpuMemory := args.gpuMemory
 
     // Calculate k-mer size based on alphabet
     kmerSize := 3 // default for aminoacid
@@ -28,16 +29,7 @@ self.body(func(args) {
     builder := exec.builder().
         software(assets.importSoftware("@platforma-open/milaboratories.clonotype-space.umap:main")).
         mem(string(mem) + "GiB").
-        cpu(cpu)
-
-    // Request GPU only when the backend reports one. .gpuMemory() against a
-    // backend without GPU is a hard error, so we MUST gate with feats.hasGpu.
-    // The umap software falls back to sklearn on CPU when --umap-backend=auto.
-    if feats.hasGpu {
-        builder = builder.gpuMemory("16GiB")
-    }
-
-    umapClones := builder.
+        cpu(cpu).
         addFile("sequences.tsv", umapTable).
         arg("-i").arg("sequences.tsv").
         arg("-c").arg("sequence").
@@ -46,7 +38,19 @@ self.body(func(args) {
         arg("--umap-min-dist").arg(string(umap_min_dist)).
         arg("--alphabet").arg(alphabet).
         arg("--k-mer-size").arg(string(kmerSize)).
-        arg("--n-jobs").arg(string(cpu)).
+        arg("--n-jobs").arg(string(cpu))
+
+    // Request GPU only when the backend reports one. .gpuMemory() against a
+    // backend without GPU is a hard error, so we MUST gate with feats.hasGpu.
+    // When GPU is available, force the cuml backend; otherwise let the
+    // software auto-select (sklearn on CPU).
+    if feats.hasGpu {
+        builder = builder.
+            gpuMemory(string(gpuMemory) + "GiB").
+            arg("--umap-backend").arg("cuml")
+    }
+
+    umapClones := builder.
         saveFile("umap.tsv").
         saveFile("skipped_clonotypes_summary.txt").
         saveStdoutStream().

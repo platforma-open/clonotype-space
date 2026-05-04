@@ -29,6 +29,7 @@ export type BlockArgs = {
   umap_min_dist: number;
   cpu: number;
   mem: number;
+  gpuMemory: number;
 };
 
 export type UiState = {
@@ -81,6 +82,7 @@ export const model = BlockModel.create()
     umap_min_dist: 0.5,
     mem: 64,
     cpu: 8,
+    gpuMemory: 16,
   })
 
   .withUiState<UiState>({
@@ -103,7 +105,8 @@ export const model = BlockModel.create()
     && ctx.args.umap_neighbors !== undefined
     && ctx.args.umap_min_dist !== undefined
     && ctx.args.mem !== undefined
-    && ctx.args.cpu !== undefined,
+    && ctx.args.cpu !== undefined
+    && ctx.args.gpuMemory !== undefined,
   )
 
   .output('inputOptions', (ctx) =>
