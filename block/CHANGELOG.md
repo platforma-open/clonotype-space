@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space
 
+## 3.0.1
+
+### Patch Changes
+
+- 0c78394: Include peptides in documentation
+
 ## 3.0.0
 
 ### Major Changes
