@@ -1,5 +1,12 @@
 # @platforma-open/milaboratories.clonotype-space
 
+## 3.0.2
+
+### Patch Changes
+
+- Updated dependencies [d98b141]
+  - @platforma-open/milaboratories.clonotype-space.ui@3.0.1
+
 ## 3.0.1
 
 ### Patch Changes
