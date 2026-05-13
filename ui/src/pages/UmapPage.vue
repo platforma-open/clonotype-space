@@ -7,10 +7,9 @@ import {
   getRawPlatformaInstance,
 } from '@platforma-sdk/model';
 
-import { PlAccordionSection, PlAlert, PlBlockPage, PlBtnGhost, PlBtnGroup, PlDropdownMulti, PlDropdownRef, PlLogView, PlMaskIcon24, PlNumberField, PlSlideModal, PlTextField } from '@platforma-sdk/ui-vue';
-import { listToOptions } from '@platforma-sdk/ui-vue';
 import { PlMultiSequenceAlignment } from '@milaboratories/multi-sequence-alignment';
 import strings from '@milaboratories/strings';
+import { listToOptions, PlAccordionSection, PlAlert, PlBlockPage, PlBtnGhost, PlBtnGroup, PlDropdownMulti, PlDropdownRef, PlLogView, PlMaskIcon24, PlNumberField, PlSlideModal, PlTextField } from '@platforma-sdk/ui-vue';
 import { useApp } from '../app';
 
 import type { PredefinedGraphOption } from '@milaboratories/graph-maker';
@@ -51,16 +50,22 @@ const defaultOptions = computed((): PredefinedGraphOption<'scatterplot-umap'>[] 
     ));
   }
 
+  // @TODO: Remove if chunk when version 3.0.0 gets consolidated
+  let umap1 = getIndex('pl7.app/umap1', umapPcols);
+  let umap2 = getIndex('pl7.app/umap2', umapPcols);
+  if (umap1 === -1) {
+    umap1 = getIndex('pl7.app/vdj/umap1', umapPcols);
+    umap2 = getIndex('pl7.app/vdj/umap2', umapPcols);
+  }
+
   const defaults: PredefinedGraphOption<'scatterplot-umap'>[] = [
     {
       inputName: 'x',
-      selectedSource: umapPcols[getIndex('pl7.app/umap1',
-        umapPcols)].spec,
+      selectedSource: umapPcols[umap1].spec,
     },
     {
       inputName: 'y',
-      selectedSource: umapPcols[getIndex('pl7.app/umap2',
-        umapPcols)].spec,
+      selectedSource: umapPcols[umap2].spec,
     },
   ];
   return defaults;

@@ -80,9 +80,12 @@ wf.body(func(args) {
 		umapTable: umapTable,
 		umap_neighbors: umap_neighbors,
 		umap_min_dist: umap_min_dist,
-		alphabet: alphabet,
-		mem: mem,
-		cpu: cpu
+		alphabet: alphabet
+	},{
+		metaInputs: {
+			mem: mem,
+			cpu: cpu
+		}
 	})
 
 	// Get UMAP file and stdout stream from subtemplate
@@ -119,7 +122,9 @@ wf.body(func(args) {
 	return {
 		outputs: {
 			umapPf: pframes.exportFrame(pf),
-			umapOutput: umapOutput
+			umapOutput: umapOutput,
+			// Needed to avoid re-trigger of umap template on block updates
+			umapTsVFile: umapTsVFile
 		},
 		exports: {
 			umapPf: pf
