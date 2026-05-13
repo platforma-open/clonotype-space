@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.workflow
 
+## 3.0.1
+
+### Patch Changes
+
+- 5d72a91: Fix CID issues
+
 ## 3.0.0
 
 ### Major Changes
