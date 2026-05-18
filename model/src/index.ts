@@ -1,4 +1,3 @@
-import type { GraphMakerState } from '@milaboratories/graph-maker';
 import type {
   DataInfo,
   InferOutputsType,
@@ -6,131 +5,99 @@ import type {
   PColumnIdAndSpec,
   PColumnValues,
   PFrameHandle,
-  PlMultiSequenceAlignmentModel,
-  PlRef,
-  RenderCtx,
-  SUniversalPColumnId,
+  RenderCtxBase,
   TreeNodeAccessor,
 } from '@platforma-sdk/model';
 import {
-  BlockModel,
+  BlockModelV3,
   createPFrameForGraphs,
 } from '@platforma-sdk/model';
 import strings from '@milaboratories/strings';
+import { blockDataModel } from './dataModel';
 import { getDefaultBlockLabel } from './label';
-
-export type BlockArgs = {
-  defaultBlockLabel: string;
-  customBlockLabel: string;
-  inputAnchor?: PlRef;
-  sequencesRef: SUniversalPColumnId[];
-  sequenceType: 'aminoacid' | 'nucleotide';
-  umap_neighbors: number;
-  umap_min_dist: number;
-  cpu: number;
-  mem: number;
-};
-
-export type UiState = {
-  graphStateUMAP: GraphMakerState;
-  alignmentModel: PlMultiSequenceAlignmentModel;
-};
+import type { BlockArgs, BlockData } from './types';
 
 type Column = PColumn<DataInfo<TreeNodeAccessor> | TreeNodeAccessor | PColumnValues>;
 
-type Columns = {
-  props: Column[];
-};
+const inputAnchorSpecs = [
+  {
+    axes: [
+      { name: 'pl7.app/sampleId' },
+      { name: 'pl7.app/vdj/clonotypeKey' },
+    ],
+    annotations: { 'pl7.app/isAnchor': 'true' },
+  },
+  {
+    axes: [
+      { name: 'pl7.app/sampleId' },
+      { name: 'pl7.app/vdj/scClonotypeKey' },
+    ],
+    annotations: { 'pl7.app/isAnchor': 'true' },
+  },
+  {
+    axes: [
+      { name: 'pl7.app/sampleId' },
+      { name: 'pl7.app/variantKey' },
+    ],
+    annotations: { 'pl7.app/isAnchor': 'true' },
+  },
+];
 
-function getColumns(ctx: Pick<RenderCtx<BlockArgs, UiState>, 'args' | 'resultPool'>): Columns | undefined {
-  const anchor = ctx.args?.inputAnchor;
-  if (anchor === undefined)
-    return undefined;
-
-  const anchorSpec = ctx.resultPool.getPColumnSpecByRef(anchor);
-  if (anchorSpec === undefined)
-    return undefined;
-
-  // all clone properties
-  const props = (ctx.resultPool.getAnchoredPColumns(
-    { main: anchor },
-    [
-      {
-        axes: [{ anchor: 'main', idx: 1 }],
-      },
-    ]) ?? [])
-    .filter((p) => p.spec.annotations?.['pl7.app/sequence/isAnnotation'] !== 'true');
-
-  return {
-    props: props,
-  };
+function computeDefaultLabel(data: BlockData): string {
+  return getDefaultBlockLabel({
+    sequenceLabels: data.sequenceLabels,
+    umap_neighbors: data.umap_neighbors,
+    umap_min_dist: data.umap_min_dist,
+  });
 }
 
-export const model = BlockModel.create()
+function getAnchoredClonotypeProps(
+  ctx: Pick<RenderCtxBase<BlockArgs, BlockData>, 'data' | 'resultPool'>,
+): Column[] | undefined {
+  const anchor = ctx.data.inputAnchor;
+  if (!anchor) return undefined;
 
-  .withArgs<BlockArgs>({
-    defaultBlockLabel: getDefaultBlockLabel({
-      sequenceLabels: [],
-      umap_neighbors: 15,
-      umap_min_dist: 0.5,
-    }),
-    customBlockLabel: '',
-    sequenceType: 'aminoacid',
-    sequencesRef: [],
-    umap_neighbors: 15,
-    umap_min_dist: 0.5,
-    mem: 64,
-    cpu: 8,
+  const anchorSpec = ctx.resultPool.getPColumnSpecByRef(anchor);
+  if (!anchorSpec) return undefined;
+
+  return (ctx.resultPool.getAnchoredPColumns(
+    { main: anchor },
+    [{ axes: [{ anchor: 'main', idx: 1 }] }],
+  ) ?? []).filter(
+    (p) => p.spec.annotations?.['pl7.app/sequence/isAnnotation'] !== 'true',
+  );
+}
+
+export const platforma = BlockModelV3.create(blockDataModel)
+
+  .args<BlockArgs>((data) => {
+    if (data.inputAnchor === undefined) throw new Error('Input dataset is required');
+    if (data.sequencesRef.length === 0) throw new Error('At least one sequence column is required');
+    if (data.umap_neighbors === undefined) throw new Error('UMAP neighbors is required');
+    if (data.umap_min_dist === undefined) throw new Error('UMAP min distance is required');
+    if (data.cpu === undefined) throw new Error('CPU is required');
+    if (data.mem === undefined) throw new Error('Memory is required');
+
+    return {
+      defaultBlockLabel: computeDefaultLabel(data),
+      customBlockLabel: data.customBlockLabel,
+      inputAnchor: data.inputAnchor,
+      sequencesRef: data.sequencesRef,
+      sequenceType: data.sequenceType,
+      umap_neighbors: data.umap_neighbors,
+      umap_min_dist: data.umap_min_dist,
+      cpu: data.cpu,
+      mem: data.mem,
+    };
   })
-
-  .withUiState<UiState>({
-    graphStateUMAP: {
-      title: 'Sequence Space UMAP',
-      template: 'dots',
-      currentTab: 'settings',
-      layersSettings: {
-        dots: {
-          dotFill: '#99E099',
-        },
-      },
-    },
-    alignmentModel: {},
-  })
-
-  .argsValid((ctx) =>
-    ctx.args.inputAnchor !== undefined
-    && ctx.args.sequencesRef.length > 0
-    && ctx.args.umap_neighbors !== undefined
-    && ctx.args.umap_min_dist !== undefined
-    && ctx.args.mem !== undefined
-    && ctx.args.cpu !== undefined,
-  )
 
   .output('inputOptions', (ctx) =>
-    ctx.resultPool.getOptions([{
-      axes: [
-        { name: 'pl7.app/sampleId' },
-        { name: 'pl7.app/vdj/clonotypeKey' },
-      ],
-      annotations: { 'pl7.app/isAnchor': 'true' },
-    }, {
-      axes: [
-        { name: 'pl7.app/sampleId' },
-        { name: 'pl7.app/vdj/scClonotypeKey' },
-      ],
-      annotations: { 'pl7.app/isAnchor': 'true' },
-    }, {
-      axes: [
-        { name: 'pl7.app/sampleId' },
-        { name: 'pl7.app/variantKey' },
-      ],
-      annotations: { 'pl7.app/isAnchor': 'true' },
-    }]),
+    ctx.resultPool.getOptions(inputAnchorSpecs),
   )
 
   .output('modality', (ctx) => {
-    const spec = ctx.args.inputAnchor
-      ? ctx.resultPool.getPColumnSpecByRef(ctx.args.inputAnchor)
+    const spec = ctx.data.inputAnchor
+      ? ctx.resultPool.getPColumnSpecByRef(ctx.data.inputAnchor)
       : undefined;
     if (!spec) return undefined;
     for (const ax of spec.axesSpec) {
@@ -141,7 +108,7 @@ export const model = BlockModel.create()
   }, { retentive: true })
 
   .output('sequenceOptions', (ctx) => {
-    const ref = ctx.args.inputAnchor;
+    const ref = ctx.data.inputAnchor;
     if (ref === undefined) return undefined;
 
     const axis1Name = ctx.resultPool.getPColumnSpecByRef(ref)?.axesSpec[1].name;
@@ -217,9 +184,8 @@ export const model = BlockModel.create()
       };
     });
 
-    // Sort: main sequences first, then alphabetically
+    // Sort: main sequences first, then keep result-pool order
     return optionsWithMetadata.sort((a, b) => {
-      // Main sequences first
       if (a.isMain && !b.isMain) return -1;
       if (b.isMain && !a.isMain) return 1;
       return 0;
@@ -227,51 +193,37 @@ export const model = BlockModel.create()
   })
 
   .output('msaPf', (ctx) => {
-    const columns = getColumns(ctx);
-    if (!columns) return undefined;
-
-    return createPFrameForGraphs(ctx, columns.props);
+    const props = getAnchoredClonotypeProps(ctx);
+    if (!props) return undefined;
+    return createPFrameForGraphs(ctx, props);
   })
 
   .outputWithStatus('umapPf', (ctx): PFrameHandle | undefined => {
     const pCols = ctx.outputs?.resolve('umapPf')?.getPColumns();
-    if (pCols === undefined) {
-      return undefined;
-    }
-
+    if (pCols === undefined) return undefined;
     return createPFrameForGraphs(ctx, pCols);
   })
 
   .output('umapOutput', (ctx) => ctx.outputs?.resolve('umapOutput')?.getLogHandle())
 
-  // Create a PTable with the first dimension of the UMAP to test if file is empty
-  // output file will only be empty in cases where input data was empty
+  // Single-column PTable used by the UI to detect empty UMAP output
+  // (the input dataset has too few sequences to embed).
   .output('umapDim1Table', (ctx) => {
     const pCols = ctx.outputs?.resolve('umapPf')?.getPColumns();
-    if (pCols === undefined) {
-      return undefined;
-    }
+    if (pCols === undefined) return undefined;
     const dim1Column = pCols.find((p) => p.spec.name === 'pl7.app/umap1');
-    if (dim1Column === undefined) {
-      return undefined;
-    }
+    if (dim1Column === undefined) return undefined;
     return ctx.createPTable({ columns: [dim1Column] });
   })
 
-  // Return a list of Pcols for plot defaults
   .output('umapPcols', (ctx) => {
     const pCols = ctx.outputs?.resolve('umapPf')?.getPColumns();
-
-    if (pCols === undefined || pCols.length === 0) {
-      return undefined;
-    }
-
+    if (pCols === undefined || pCols.length === 0) return undefined;
     return pCols.map(
-      (c) =>
-        ({
-          columnId: c.id,
-          spec: c.spec,
-        } satisfies PColumnIdAndSpec),
+      (c) => ({
+        columnId: c.id,
+        spec: c.spec,
+      } satisfies PColumnIdAndSpec),
     );
   })
 
@@ -279,14 +231,16 @@ export const model = BlockModel.create()
 
   .title(() => 'Sequence Space')
 
-  .subtitle((ctx) => ctx.args.customBlockLabel || ctx.args.defaultBlockLabel)
+  .subtitle((ctx) => ctx.data.customBlockLabel || computeDefaultLabel(ctx.data))
 
   .sections((_ctx) => ([
-    { type: 'link', href: '/', label: strings.titles.main },
+    { type: 'link' as const, href: '/' as const, label: strings.titles.main },
   ]))
 
-  .done(2);
+  .done();
 
-export type BlockOutputs = InferOutputsType<typeof model>;
+export type Platforma = typeof platforma;
+export type BlockOutputs = InferOutputsType<typeof platforma>;
 
 export { getDefaultBlockLabel } from './label';
+export * from './types';
