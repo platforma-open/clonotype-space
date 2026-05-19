@@ -52,13 +52,17 @@ self.body(func(inputs) {
 	umapTable = umapTable.build()
 
 	// Run the UMAP exec template (deferred — its inputs await the TSV above).
+	// mem/cpu are passed via metaInputs so changes to them do not retrigger the umap template.
 	umapRender := render.create(umapCalculationTpl, {
 		umapTable: umapTable,
 		umap_neighbors: umap_neighbors,
 		umap_min_dist: umap_min_dist,
-		alphabet: alphabet,
-		mem: mem,
-		cpu: cpu
+		alphabet: alphabet
+	}, {
+		metaInputs: {
+			mem: mem,
+			cpu: cpu
+		}
 	})
 	umapTsVFile := umapRender.output("umapTsVFile")
 	umapOutput := umapRender.output("umapOutput")
@@ -91,6 +95,8 @@ self.body(func(inputs) {
 
 	return {
 		pf: pf,
-		umapOutput: umapOutput
+		umapOutput: umapOutput,
+		// Forwarded so the outer template can expose it; avoids retrigger of umap on block updates.
+		umapTsVFile: umapTsVFile
 	}
 })
