@@ -309,7 +309,7 @@ def _encode_position_tagged_fixed_length(sequences, seq_len, k, chars):
 
 def position_tagged_kmer_vectors(sequences, k=2, alphabet='aminoacid', verbose=True):
     """
-    Position-tagged k-mer encoding.
+    Position-tagged k-mer encoding (N-terminus aligned).
 
     Each k-mer is identified by both its content AND its starting position in
     the sequence: (k-mer 'WT' at position 0) and (k-mer 'WT' at position 3)
@@ -318,25 +318,14 @@ def position_tagged_kmer_vectors(sequences, k=2, alphabet='aminoacid', verbose=T
     k-mers that overlap that position, so similar peptides stay nearby in
     feature space.
 
-    Variable lengths are handled with **dual-end padding** using filler
-    characters ('_' for aminoacid, 'N' for nucleotide):
+    Variable lengths are handled by **right-padding** (N-term alignment):
+    shorter sequences are padded with a filler character ('_' for aminoacid,
+    'N' for nucleotide) at the C-terminus so all sequences reach max length.
+    Real residues stay at positions 0..L-1; padded positions sit at the tail.
 
-        - N-terminal alignment: right-pad with the filler. Position 0 = first
-          residue. Padded positions sit at the C-terminal tail. Captures
-          motifs anchored to the start.
-        - C-terminal alignment: left-pad with the filler. Position L_max - 1 =
-          last residue. Padded positions sit at the N-terminal head. Captures
-          motifs anchored to the end.
-
-    For variable-length input both encodings are computed and horizontally
-    stacked, so motifs that are length-agnostic relative to either terminus
-    appear as features. For uniform-length input the two alignments produce
-    identical matrices, so a single encoding is built.
-
-    Feature layout per encoding: feature_index = position * |chars|^k + kmer_index.
-        - N-term block (and C-term block, when present):
-          (L_max - k + 1) * |chars|^k columns each
-        - Each sequence: (L_max - k + 1) non-zero entries per block
+    Feature layout: feature_index = position * |chars|^k + kmer_index.
+        - Total features: (L_max - k + 1) * |chars|^k
+        - Each sequence: (L_max - k + 1) non-zero entries
     """
     chars = _AMINOACID_CHARS if alphabet == 'aminoacid' else _NUCLEOTIDE_CHARS
     pad_char = '_' if alphabet == 'aminoacid' else 'N'
@@ -349,30 +338,21 @@ def position_tagged_kmer_vectors(sequences, k=2, alphabet='aminoacid', verbose=T
     num_kmers = len(chars) ** k
 
     if verbose:
-        block_count = 2 if is_variable else 1
-        label = "dual-end padded (N-term + C-term)" if is_variable else "uniform-length"
-        print(f"Position-tagged {k}-mer encoding ({label}): {n_seqs} sequences × "
-              f"{num_positions} positions × {num_kmers} k-mers × {block_count} block(s) "
-              f"= {num_positions * num_kmers * block_count} features...")
+        print(f"Position-tagged {k}-mer encoding: {n_seqs} sequences × "
+              f"{num_positions} positions × {num_kmers} k-mers = "
+              f"{num_positions * num_kmers} features...")
         if is_variable:
-            print(f"  Input length range: {min_len} to {max_len}. Padding with '{pad_char}'.")
+            print(f"  Input length range: {min_len} to {max_len}. "
+                  f"Right-padding shorter sequences with '{pad_char}'.")
 
-    if not is_variable:
-        # Uniform input — both padding directions would produce identical
-        # matrices, so a single encoding suffices.
-        matrix = _encode_position_tagged_fixed_length(sequences, max_len, k, chars)
-    else:
-        # Variable input — encode twice and hstack so the SVD/UMAP downstream
-        # can pick up motifs anchored to either terminus.
-        #   ljust → right-pad → real residues at positions 0..L-1 → N-term aligned
-        #   rjust → left-pad  → real residues at positions max_len-L..max_len-1 → C-term aligned
-        right_padded = [s if len(s) == max_len else s.ljust(max_len, pad_char)
-                        for s in sequences]
-        left_padded = [s if len(s) == max_len else s.rjust(max_len, pad_char)
-                       for s in sequences]
-        n_term_matrix = _encode_position_tagged_fixed_length(right_padded, max_len, k, chars)
-        c_term_matrix = _encode_position_tagged_fixed_length(left_padded, max_len, k, chars)
-        matrix = sparse.hstack([n_term_matrix, c_term_matrix], format='csr')
+    # Pad shorter sequences with the filler so reshape works. ljust is a no-op
+    # for already-max-length entries — the comprehension only allocates new
+    # strings where needed.
+    if is_variable:
+        sequences = [s if len(s) == max_len else s.ljust(max_len, pad_char)
+                     for s in sequences]
+
+    matrix = _encode_position_tagged_fixed_length(sequences, max_len, k, chars)
 
     if verbose:
         print(f"Position-tagged k-mer matrix created: {matrix.shape}, "
