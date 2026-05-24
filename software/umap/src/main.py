@@ -522,6 +522,15 @@ def compute_svd_embedding(matrix, svd_backend='auto',
                 svd_u, svd_s, svd_vt = run_cupy_sparse_svd(matrix_gpu, n_components_max)
                 explained_variance_ratio = compute_explained_variance_cupy(
                     svd_s, matrix_gpu, matrix.shape[0])
+                # Sanity check: cupy_svds silently returns near-zero singular
+                # values when k is too close to min(m, n) (Lanczos loses
+                # orthogonality).
+                total_explained = float(np.sum(explained_variance_ratio))
+                if total_explained < 0.01:
+                    raise RuntimeError(
+                        f"GPU sparse SVD returned degenerate output "
+                        f"(total variance = {total_explained:.4f}). "
+                    )
                 use_cupy_sparse_svd = True
                 print("GPU sparse SVD completed successfully.")
             else:
