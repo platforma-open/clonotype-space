@@ -528,7 +528,7 @@ def compute_svd_embedding(matrix, svd_backend='auto',
                 total_explained = float(np.sum(explained_variance_ratio))
                 if total_explained < 0.01:
                     raise RuntimeError(
-                        f"GPU sparse SVD returned degenerate output "
+                        f"CuPy sparse SVD returned degenerate output "
                         f"(total variance = {total_explained:.4f}). "
                     )
                 use_cupy_sparse_svd = True
