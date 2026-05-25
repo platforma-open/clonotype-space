@@ -1006,13 +1006,46 @@ def main():
                                      "UMAP analysis skipped due to insufficient sequences.")
         sys.exit(0)
 
-    sequences_all = df_valid[SEQ_COL].str.to_uppercase().to_list()
+    n_sequences_all = len(df_valid)
     keys_all = df_valid[KEY_COL].to_list()
 
+    # Make sure all sequences are in uppercase
+    df_valid_upper = df_valid.with_columns(
+        pl.col(SEQ_COL).str.to_uppercase().alias(SEQ_COL)
+    )
+    # Collapse exact duplicates before fitting (They can cause issues in GPU mode)
+    df_unique = (
+        df_valid_upper.unique(subset=[SEQ_COL], keep='first', maintain_order=True)
+        .with_row_index('_uidx')
+    )
+    sequences_unique = df_unique[SEQ_COL].to_list()
+    n_unique = len(sequences_unique)
+    if n_unique < n_sequences_all:
+        print(f"Deduplicating sequences: {n_sequences_all} valid → {n_unique} unique "
+              f"({n_sequences_all - n_unique} duplicates collapsed for SVD/UMAP).")
+
+    if n_unique < min_required_sequences:
+        print(f"Warning: Not enough unique sequences for UMAP analysis "
+              f"(required {min_required_sequences}, unique {n_unique}) — "
+              f"writing empty output.")
+        create_empty_umap_output(KEY_COL, args.umap_components, output_path)
+        create_empty_skipped_summary(args.output_dir,
+                                     "UMAP analysis skipped due to insufficient unique sequences.")
+        sys.exit(0)
+
     if run_type == 'gpu':
-        umap_embed_all = run_gpu_pipeline(args, sequences_all, umap_model)
+        umap_embed_unique = run_gpu_pipeline(args, sequences_unique, umap_model)
     else:
-        umap_embed_all = run_cpu_pipeline(args, df_valid, sequences_all, umap_model)
+        umap_embed_unique = run_cpu_pipeline(args, df_unique, sequences_unique, umap_model)
+
+    # Broadcast unique-row embeddings back to every valid row
+    index_map = (
+        df_valid_upper.select(SEQ_COL)
+        .join(df_unique.select([SEQ_COL, '_uidx']),
+              on=SEQ_COL, how='left', maintain_order='left')
+        ['_uidx'].to_numpy()
+    )
+    umap_embed_all = umap_embed_unique[index_map]
 
     start_time_save = time.time()
     write_outputs(args, df, df_valid, df_invalid, umap_embed_all, keys_all, n_invalid, output_path)
