@@ -307,7 +307,8 @@ def _encode_position_tagged_fixed_length(sequences, seq_len, k, chars):
     )
 
 
-def position_tagged_kmer_vectors(sequences, k=2, alphabet='aminoacid', verbose=True):
+def position_tagged_kmer_vectors(sequences, k=2, alphabet='aminoacid', verbose=True,
+                                 max_len=None):
     """
     Position-tagged k-mer encoding (N-terminus aligned).
 
@@ -323,6 +324,10 @@ def position_tagged_kmer_vectors(sequences, k=2, alphabet='aminoacid', verbose=T
     'N' for nucleotide) at the C-terminus so all sequences reach max length.
     Real residues stay at positions 0..L-1; padded positions sit at the tail.
 
+    `max_len` pins the encoding width across calls. Required when feeding
+    chunks into a pre-fit SVD/UMAP transformer. If omitted, max_len is taken 
+    from the input.
+
     Feature layout: feature_index = position * |chars|^k + kmer_index.
         - Total features: (L_max - k + 1) * |chars|^k
         - Each sequence: (L_max - k + 1) non-zero entries
@@ -331,9 +336,15 @@ def position_tagged_kmer_vectors(sequences, k=2, alphabet='aminoacid', verbose=T
     pad_char = '_' if alphabet == 'aminoacid' else 'N'
 
     n_seqs = len(sequences)
-    max_len = max(map(len, sequences))
+    if max_len is None:
+        max_len = max(map(len, sequences))
     min_len = min(map(len, sequences))
     is_variable = min_len != max_len
+    if max_len < k:
+        raise ValueError(
+            f"Position_tagged_kmer_vectors needs sequences of length >= k={k}, "
+            f"but the longest input sequence has length {max_len}."
+        )
     num_positions = max_len - k + 1
     num_kmers = len(chars) ** k
 
@@ -645,8 +656,9 @@ def parse_args():
                         help='Sequence encoding (default: kmer).\n'
                              '  kmer:     k-mer count vectors (position-agnostic, any length).\n'
                              '  pos-kmer: position-tagged k-mers — each (position, k-mer) pair\n'
-                             '            is a distinct feature. Requires uniform-length\n'
-                             '            sequences. Use --k-mer-size 2 for short peptides.')
+                             '            is a distinct feature. Variable-length sequences are\n'
+                             '            right-padded (N-term aligned) with "_" / "N" up to the\n'
+                             '            longest input. Use --k-mer-size 2 for short peptides.')
     parser.add_argument('--output-dir', default='.',
                         help='Directory for output files (default: current directory).')
     parser.add_argument('--svd-backend', type=str, default='auto',
@@ -790,8 +802,11 @@ def run_gpu_pipeline(args, sequences_all, umap_model):
 
     start_time_kmer = time.time()
     if args.encoding == 'pos-kmer':
+        # Pin pos-kmer width to the global max so feature counts stay consistent.
+        pos_kmer_max_len = max(map(len, sequences_all))
         matrix = position_tagged_kmer_vectors(sequences_all, k=args.k_mer_size,
-                                              alphabet=args.alphabet, verbose=True)
+                                              alphabet=args.alphabet, verbose=True,
+                                              max_len=pos_kmer_max_len)
     else:
         matrix = kmer_count_vectors(sequences_all, k=args.k_mer_size, alphabet=args.alphabet,
                                     n_jobs=args.n_jobs, verbose=True)
@@ -843,6 +858,10 @@ def run_cpu_pipeline(args, df_valid, sequences_all, umap_model):
     n_all = len(sequences_all)
     num_total_sequences = len(df_valid)
 
+    # Pin pos-kmer width to the global max so fit and chunk-transform calls
+    # produce matrices with the same column count.
+    pos_kmer_max_len = max(map(len, sequences_all)) if args.encoding == 'pos-kmer' else None
+
     # --- Build fit-sample ---
     fit_sample_size = args.max_sequences
     if fit_sample_size > 0 and num_total_sequences > fit_sample_size:
@@ -861,7 +880,8 @@ def run_cpu_pipeline(args, df_valid, sequences_all, umap_model):
     start_time_kmer = time.time()
     if args.encoding == 'pos-kmer':
         matrix_fit = position_tagged_kmer_vectors(sequences_fit, k=args.k_mer_size,
-                                                  alphabet=args.alphabet, verbose=True)
+                                                  alphabet=args.alphabet, verbose=True,
+                                                  max_len=pos_kmer_max_len)
     else:
         matrix_fit = kmer_count_vectors(sequences_fit, k=args.k_mer_size, alphabet=args.alphabet,
                                         n_jobs=args.n_jobs, verbose=True)
@@ -910,7 +930,8 @@ def run_cpu_pipeline(args, df_valid, sequences_all, umap_model):
 
         if args.encoding == 'pos-kmer':
             chunk_matrix = position_tagged_kmer_vectors(chunk_seqs, k=args.k_mer_size,
-                                                        alphabet=args.alphabet, verbose=False)
+                                                        alphabet=args.alphabet, verbose=False,
+                                                        max_len=pos_kmer_max_len)
         else:
             chunk_matrix = kmer_count_vectors(chunk_seqs, k=args.k_mer_size,
                                               alphabet=args.alphabet,
