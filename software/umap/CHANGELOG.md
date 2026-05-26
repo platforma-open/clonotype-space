@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.umap
 
+## 2.14.0
+
+### Minor Changes
+
+- dd55c8f: Positional k-mer encoder for short peptides
+
 ## 2.13.1
 
 ### Patch Changes
