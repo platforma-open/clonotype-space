@@ -103,6 +103,12 @@ SEQ_COL = 'combined_sequence'
 SPARSE_MEMORY_MULTIPLIER = 3.0
 MEMORY_BUFFER_GB = 2.0
 
+# Alphabet character lists — must stay in sync with the regex in
+# load_and_filter_input() and with the alphabet used by kmer_count_vectors().
+_AMINOACID_CHARS = ['A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L',
+                    'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'Y', 'X', '*', '_']
+_NUCLEOTIDE_CHARS = ['A', 'C', 'G', 'T', 'N']
+
 
 # ============================================================================
 # Live-flushed print
@@ -243,6 +249,125 @@ def kmer_count_vectors(sequences, k=3, alphabet='aminoacid', n_jobs=-1, verbose=
 
     if verbose:
         print(f"Sparse matrix created: {matrix.shape}, {matrix.nnz} non-zero entries")
+    return matrix
+
+
+# ============================================================================
+# Position-tagged k-mer encoding
+# ============================================================================
+
+def _encode_position_tagged_fixed_length(sequences, seq_len, k, chars):
+    """
+    Inner encoder. Assumes every sequence is exactly `seq_len` chars (no
+    padding done here). Builds the (n_seqs, (seq_len - k + 1) * |chars|^k)
+    CSR matrix via the vectorized ASCII-lookup + direct-CSR path.
+    """
+    num_chars = len(chars)
+    n_seqs = len(sequences)
+    num_positions = seq_len - k + 1
+    num_kmers = num_chars ** k
+    num_features = num_positions * num_kmers
+
+    # ASCII byte → alphabet-index lookup table. ord('A') maps to 0, ord('C')
+    # to 1, etc. Unknown chars stay at -1 so they trip the check below.
+    ascii_to_idx = np.full(256, -1, dtype=np.int32)
+    for i, c in enumerate(chars):
+        ascii_to_idx[ord(c)] = i
+
+    # Vectorization trick: concatenate all sequences into one big ASCII blob
+    # (C-implemented), then view as a (n_seqs, seq_len) uint8 array zero-copy.
+    # reshape() guarantees uniform length
+    arr = np.frombuffer(''.join(sequences).encode('ascii'),
+                        dtype=np.uint8).reshape(n_seqs, seq_len)
+    char_idx = ascii_to_idx[arr]  # broadcast lookup, shape (n_seqs, seq_len)
+    if not (char_idx >= 0).all():
+        raise ValueError("position_tagged_kmer_vectors received an unknown "
+                         "character — load_and_filter_input should have dropped it.")
+
+    # Encode each window of k characters as a base-`num_chars` integer:
+    #   kmer_index = sum_{i in [0, k)} char_idx[:, p+i] * num_chars^(k-1-i)
+    # This gives a unique kmer_index per distinct k-mer content.
+    powers = num_chars ** np.arange(k - 1, -1, -1, dtype=np.int64)
+    kmer_at_position = np.zeros((n_seqs, num_positions), dtype=np.int64)
+    for p in range(num_positions):
+        kmer_at_position[:, p] = (char_idx[:, p:p + k] * powers).sum(axis=1)
+
+    # Final column index = position * num_kmers + kmer_index. Position offsets
+    # are added per row in one broadcast. Every row has exactly num_positions
+    # non-zeros in increasing column order, so we can build the CSR directly
+    # with a uniform-stride indptr (no COO → CSR conversion needed).
+    col_offsets = (np.arange(num_positions, dtype=np.int64) * num_kmers).reshape(1, -1)
+    col_indices = (col_offsets + kmer_at_position).ravel().astype(np.int32)
+    indptr = np.arange(0, n_seqs * num_positions + 1, num_positions, dtype=np.int32)
+    data = np.ones(n_seqs * num_positions, dtype=np.int8)
+    return sparse.csr_matrix(
+        (data, col_indices, indptr),
+        shape=(n_seqs, num_features),
+        dtype=np.int8,
+    )
+
+
+def position_tagged_kmer_vectors(sequences, k=2, alphabet='aminoacid', verbose=True,
+                                 max_len=None):
+    """
+    Position-tagged k-mer encoding (N-terminus aligned).
+
+    Each k-mer is identified by both its content AND its starting position in
+    the sequence: (k-mer 'WT' at position 0) and (k-mer 'WT' at position 3)
+    are distinct features. This combines positional encoding's exactness with
+    k-mer composition's shift-robustness — a 1-aa substitution only flips the
+    k-mers that overlap that position, so similar peptides stay nearby in
+    feature space.
+
+    Variable lengths are handled by **right-padding** (N-term alignment):
+    shorter sequences are padded with a filler character ('_' for aminoacid,
+    'N' for nucleotide) at the C-terminus so all sequences reach max length.
+    Real residues stay at positions 0..L-1; padded positions sit at the tail.
+
+    `max_len` pins the encoding width across calls. Required when feeding
+    chunks into a pre-fit SVD/UMAP transformer. If omitted, max_len is taken 
+    from the input.
+
+    Feature layout: feature_index = position * |chars|^k + kmer_index.
+        - Total features: (L_max - k + 1) * |chars|^k
+        - Each sequence: (L_max - k + 1) non-zero entries
+    """
+    chars = _AMINOACID_CHARS if alphabet == 'aminoacid' else _NUCLEOTIDE_CHARS
+    pad_char = '_' if alphabet == 'aminoacid' else 'N'
+
+    n_seqs = len(sequences)
+    if max_len is None:
+        max_len = max(map(len, sequences))
+    min_len = min(map(len, sequences))
+    is_variable = min_len != max_len
+    if max_len < k:
+        raise ValueError(
+            f"Position_tagged_kmer_vectors needs sequences of length >= k={k}, "
+            f"but the longest input sequence has length {max_len}."
+        )
+    num_positions = max_len - k + 1
+    num_kmers = len(chars) ** k
+
+    if verbose:
+        print(f"Position-tagged {k}-mer encoding: {n_seqs} sequences × "
+              f"{num_positions} positions × {num_kmers} k-mers = "
+              f"{num_positions * num_kmers} features...")
+        if is_variable:
+            print(f"  Input length range: {min_len} to {max_len}. "
+                  f"Right-padding shorter sequences with '{pad_char}'.")
+
+    # Pad shorter sequences with the filler so reshape works. ljust is a no-op
+    # for already-max-length entries — the comprehension only allocates new
+    # strings where needed.
+    if is_variable:
+        sequences = [s if len(s) == max_len else s.ljust(max_len, pad_char)
+                     for s in sequences]
+
+    matrix = _encode_position_tagged_fixed_length(sequences, max_len, k, chars)
+
+    if verbose:
+        print(f"Position-tagged k-mer matrix created: {matrix.shape}, "
+              f"{matrix.nnz} non-zero entries")
     return matrix
 
 
@@ -408,6 +533,15 @@ def compute_svd_embedding(matrix, svd_backend='auto',
                 svd_u, svd_s, svd_vt = run_cupy_sparse_svd(matrix_gpu, n_components_max)
                 explained_variance_ratio = compute_explained_variance_cupy(
                     svd_s, matrix_gpu, matrix.shape[0])
+                # Sanity check: cupy_svds silently returns near-zero singular
+                # values when k is too close to min(m, n) (Lanczos loses
+                # orthogonality).
+                total_explained = float(np.sum(explained_variance_ratio))
+                if total_explained < 0.01:
+                    raise RuntimeError(
+                        f"CuPy sparse SVD returned degenerate output "
+                        f"(total variance = {total_explained:.4f}). "
+                    )
                 use_cupy_sparse_svd = True
                 print("GPU sparse SVD completed successfully.")
             else:
@@ -518,6 +652,13 @@ def parse_args():
                         help='UMAP min_dist (default: 0.5).')
     parser.add_argument('--k-mer-size', type=int, default=None,
                         help='Size of k-mers (default: 3 for aminoacid, 6 for nucleotide).')
+    parser.add_argument('--encoding', choices=['kmer', 'pos-kmer'], default='kmer',
+                        help='Sequence encoding (default: kmer).\n'
+                             '  kmer:     k-mer count vectors (position-agnostic, any length).\n'
+                             '  pos-kmer: position-tagged k-mers — each (position, k-mer) pair\n'
+                             '            is a distinct feature. Variable-length sequences are\n'
+                             '            right-padded (N-term aligned) with "_" / "N" up to the\n'
+                             '            longest input. Use --k-mer-size 2 for short peptides.')
     parser.add_argument('--output-dir', default='.',
                         help='Directory for output files (default: current directory).')
     parser.add_argument('--svd-backend', type=str, default='auto',
@@ -660,9 +801,16 @@ def run_gpu_pipeline(args, sequences_all, umap_model):
     n_all = len(sequences_all)
 
     start_time_kmer = time.time()
-    matrix = kmer_count_vectors(sequences_all, k=args.k_mer_size, alphabet=args.alphabet,
-                                n_jobs=args.n_jobs, verbose=True)
-    print(f"K-mer counting completed in {time.time() - start_time_kmer:.2f} seconds.\n")
+    if args.encoding == 'pos-kmer':
+        # Pin pos-kmer width to the global max so feature counts stay consistent.
+        pos_kmer_max_len = max(map(len, sequences_all))
+        matrix = position_tagged_kmer_vectors(sequences_all, k=args.k_mer_size,
+                                              alphabet=args.alphabet, verbose=True,
+                                              max_len=pos_kmer_max_len)
+    else:
+        matrix = kmer_count_vectors(sequences_all, k=args.k_mer_size, alphabet=args.alphabet,
+                                    n_jobs=args.n_jobs, verbose=True)
+    print(f"Encoding completed in {time.time() - start_time_kmer:.2f} seconds.\n")
 
     start_time_svd = time.time()
     print("Running Truncated SVD...")
@@ -710,6 +858,10 @@ def run_cpu_pipeline(args, df_valid, sequences_all, umap_model):
     n_all = len(sequences_all)
     num_total_sequences = len(df_valid)
 
+    # Pin pos-kmer width to the global max so fit and chunk-transform calls
+    # produce matrices with the same column count.
+    pos_kmer_max_len = max(map(len, sequences_all)) if args.encoding == 'pos-kmer' else None
+
     # --- Build fit-sample ---
     fit_sample_size = args.max_sequences
     if fit_sample_size > 0 and num_total_sequences > fit_sample_size:
@@ -724,11 +876,16 @@ def run_cpu_pipeline(args, df_valid, sequences_all, umap_model):
     sequences_fit = df_fit[SEQ_COL].str.to_uppercase().to_list()
     num_fit_sequences = len(sequences_fit)
 
-    # --- Phase 1a: k-mer matrix on fit sample ---
+    # --- Phase 1a: encode fit sample ---
     start_time_kmer = time.time()
-    matrix_fit = kmer_count_vectors(sequences_fit, k=args.k_mer_size, alphabet=args.alphabet,
-                                    n_jobs=args.n_jobs, verbose=True)
-    print(f"K-mer counting completed in {time.time() - start_time_kmer:.2f} seconds.\n")
+    if args.encoding == 'pos-kmer':
+        matrix_fit = position_tagged_kmer_vectors(sequences_fit, k=args.k_mer_size,
+                                                  alphabet=args.alphabet, verbose=True,
+                                                  max_len=pos_kmer_max_len)
+    else:
+        matrix_fit = kmer_count_vectors(sequences_fit, k=args.k_mer_size, alphabet=args.alphabet,
+                                        n_jobs=args.n_jobs, verbose=True)
+    print(f"Encoding completed in {time.time() - start_time_kmer:.2f} seconds.\n")
 
     # --- Phase 1b: fit SVD ---
     start_time_svd = time.time()
@@ -771,8 +928,14 @@ def run_cpu_pipeline(args, df_valid, sequences_all, umap_model):
         chunk_end = min(chunk_start + TRANSFORM_CHUNK_SIZE, n_all)
         chunk_seqs = sequences_all[chunk_start:chunk_end]
 
-        chunk_matrix = kmer_count_vectors(chunk_seqs, k=args.k_mer_size, alphabet=args.alphabet,
-                                          n_jobs=args.n_jobs, verbose=False)
+        if args.encoding == 'pos-kmer':
+            chunk_matrix = position_tagged_kmer_vectors(chunk_seqs, k=args.k_mer_size,
+                                                        alphabet=args.alphabet, verbose=False,
+                                                        max_len=pos_kmer_max_len)
+        else:
+            chunk_matrix = kmer_count_vectors(chunk_seqs, k=args.k_mer_size,
+                                              alphabet=args.alphabet,
+                                              n_jobs=args.n_jobs, verbose=False)
         chunk_svd = svd_transformer.transform(chunk_matrix)
         chunk_umap = umap_model.transform(chunk_svd)
         all_coords.append(chunk_umap)
@@ -864,13 +1027,46 @@ def main():
                                      "UMAP analysis skipped due to insufficient sequences.")
         sys.exit(0)
 
-    sequences_all = df_valid[SEQ_COL].str.to_uppercase().to_list()
+    n_sequences_all = len(df_valid)
     keys_all = df_valid[KEY_COL].to_list()
 
+    # Make sure all sequences are in uppercase
+    df_valid_upper = df_valid.with_columns(
+        pl.col(SEQ_COL).str.to_uppercase().alias(SEQ_COL)
+    )
+    # Collapse exact duplicates before fitting (They can cause issues in GPU mode)
+    df_unique = (
+        df_valid_upper.unique(subset=[SEQ_COL], keep='first', maintain_order=True)
+        .with_row_index('_uidx')
+    )
+    sequences_unique = df_unique[SEQ_COL].to_list()
+    n_unique = len(sequences_unique)
+    if n_unique < n_sequences_all:
+        print(f"Deduplicating sequences: {n_sequences_all} valid → {n_unique} unique "
+              f"({n_sequences_all - n_unique} duplicates collapsed for SVD/UMAP).")
+
+    if n_unique < min_required_sequences:
+        print(f"Warning: Not enough unique sequences for UMAP analysis "
+              f"(required {min_required_sequences}, unique {n_unique}) — "
+              f"writing empty output.")
+        create_empty_umap_output(KEY_COL, args.umap_components, output_path)
+        create_empty_skipped_summary(args.output_dir,
+                                     "UMAP analysis skipped due to insufficient unique sequences.")
+        sys.exit(0)
+
     if run_type == 'gpu':
-        umap_embed_all = run_gpu_pipeline(args, sequences_all, umap_model)
+        umap_embed_unique = run_gpu_pipeline(args, sequences_unique, umap_model)
     else:
-        umap_embed_all = run_cpu_pipeline(args, df_valid, sequences_all, umap_model)
+        umap_embed_unique = run_cpu_pipeline(args, df_unique, sequences_unique, umap_model)
+
+    # Broadcast unique-row embeddings back to every valid row
+    index_map = (
+        df_valid_upper.select(SEQ_COL)
+        .join(df_unique.select([SEQ_COL, '_uidx']),
+              on=SEQ_COL, how='left', maintain_order='left')
+        ['_uidx'].to_numpy()
+    )
+    umap_embed_all = umap_embed_unique[index_map]
 
     start_time_save = time.time()
     write_outputs(args, df, df_valid, df_invalid, umap_embed_all, keys_all, n_invalid, output_path)

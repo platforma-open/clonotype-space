@@ -1,31 +1,30 @@
-import type { PColumnPredicate, PColumnSpec } from '@platforma-sdk/model';
+import type { PColumnPredicate } from '@platforma-sdk/model';
 import { type PTableColumnSpec, Annotation, Domain, PAxisName, readAnnotationJson, readDomain } from '@platforma-sdk/model';
 
 export const isSequenceColumn: PColumnPredicate = ({ spec }) => {
-  const isBulkSequence = (spec: PColumnSpec) =>
-    spec.name !== 'pl7.app/vdj/sequenceLength'
-    && spec.name !== 'pl7.app/vdj/sequence/annotation'
-    && readDomain(spec, Domain.Alphabet) === 'aminoacid'
-    // Peptide specific
-    && spec.name !== 'pl7.app/sequenceLength'
-    // Reject cluster-centroid sequences
-    && spec.axesSpec[0]?.name !== 'pl7.app/clusterId';
+  // Length / annotation columns are not sequence data.
+  if (
+    spec.name === 'pl7.app/vdj/sequenceLength'
+    || spec.name === 'pl7.app/sequenceLength'
+    || spec.name === 'pl7.app/vdj/sequence/annotation'
+  ) return false;
+  // Reject cluster-centroid sequences (their axis is clusterId, not the
+  // input's clonotype/variant axis).
+  if (spec.axesSpec[0]?.name === 'pl7.app/clusterId') return false;
+  // Only amino-acid sequences belong in MSA.
+  if (readDomain(spec, Domain.Alphabet) !== 'aminoacid') return false;
+  // Single-cell sequences: reject non-primary chains (e.g. light), but keep
+  // chain-less constructs like scFv where the domain field is absent entirely.
+  if (spec.axesSpec[0]?.name === PAxisName.VDJ.ScClonotypeKey) {
+    const chainIndex = readDomain(spec, Domain.VDJ.ScClonotypeChain.Index);
+    if (chainIndex !== undefined && chainIndex !== 'primary') return false;
+  }
 
-  const isSingleCellSequence = (spec: PColumnSpec) =>
-    spec.name !== 'pl7.app/vdj/sequenceLength'
-    && spec.name !== 'pl7.app/vdj/sequence/annotation'
-    && readDomain(spec, Domain.VDJ.ScClonotypeChain.Index) === 'primary'
-    && readDomain(spec, Domain.Alphabet) === 'aminoacid'
-    && spec.axesSpec[0].name === PAxisName.VDJ.ScClonotypeKey;
-
-  return (isBulkSequence(spec) || isSingleCellSequence(spec))
-    && {
-      // VDJ uses 'pl7.app/vdj/isAssemblingFeature'; peptide-extraction emits
-      // the modality-neutral 'pl7.app/isAssemblingFeature' (no `vdj/` prefix).
-      default: readAnnotationJson(spec, Annotation.VDJ.IsAssemblingFeature)
-        ?? readAnnotationJson(spec, 'pl7.app/isAssemblingFeature' as never)
-        ?? false,
-    };
+  // Default-select the assembling-feature sequence.
+  const isAssemblingFeature
+    = readAnnotationJson(spec, Annotation.VDJ.IsAssemblingFeature)
+      ?? spec.annotations?.['pl7.app/isAssemblingFeature'] === 'true';
+  return { default: isAssemblingFeature };
 };
 
 export function defaultFilters(tSpec: PTableColumnSpec): (unknown | undefined) {

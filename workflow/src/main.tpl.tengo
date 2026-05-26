@@ -23,6 +23,14 @@ wf.body(func(args) {
 		bundleBuilder.addSingle(ref)
 	}
 
+	// Peptide-only: pull the per-peptide sequence length column.
+	bundleBuilder.addMulti(
+		{
+			axes: [{ anchor: "main", idx: 1 }],
+			name: "pl7.app/sequenceLength",
+			domain: { "pl7.app/feature": "peptide" }
+		}, "peptideSequenceLength")
+
 	columns := bundleBuilder.build()
 
 	// Delegate to the inner template. Its body runs as soon as upstream specs are

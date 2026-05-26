@@ -15,6 +15,7 @@ xsv := import("@platforma-sdk/workflow-tengo:pframes.xsv")
 umapConv := import(":pf-umap-conv")
 
 umapCalculationTpl := assets.importTemplate(":umap-calculation")
+minPeptideLengthTpl := assets.importTemplate(":min-peptide-length")
 
 // Await only column specs — NOT data. This is what enables early spec export.
 self.awaitState("columns", "PColumnBundle")
@@ -39,6 +40,22 @@ self.body(func(inputs) {
 	// Spec is plain JSON, available now (PColumnBundle await covered specs).
 	datasetSpec := columns.getSpec(inputAnchor)
 
+	// compute the shortest peptide length
+	isPeptide := datasetSpec.axesSpec[1].name == "pl7.app/variantKey"
+	minPeptideLength := undefined
+	if isPeptide {
+		peptideLenCols := columns.getColumns("peptideSequenceLength")
+		if len(peptideLenCols) > 0 {
+			minLenResult := render.create(minPeptideLengthTpl, {
+				spec: peptideLenCols[0].spec,
+				data: peptideLenCols[0].data
+			})
+			minPeptideLength = minLenResult.output("minLength")
+		} else {
+			ll.panic("Peptide input is missing required pl7.app/sequenceLength column")
+		}
+	}
+
 	// Build input TSV with clonotype id and selected sequence columns.
 	// Column data is a deferred reference here — the TSV builder consumes it lazily.
 	umapTable := pframes.tsvFileBuilder()
@@ -57,7 +74,9 @@ self.body(func(inputs) {
 		umapTable: umapTable,
 		umap_neighbors: umap_neighbors,
 		umap_min_dist: umap_min_dist,
-		alphabet: alphabet
+		alphabet: alphabet,
+		isPeptide: isPeptide,
+		minPeptideLength: minPeptideLength
 	}, {
 		metaInputs: {
 			mem: mem,
