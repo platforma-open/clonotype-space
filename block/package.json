@@ -34,7 +34,8 @@
       "tags": [
         "airr",
         "downstream",
-        "peptide"
+        "peptide",
+        "gpu"
       ],
       "organization": {
         "name": "MiLaboratories Inc",
