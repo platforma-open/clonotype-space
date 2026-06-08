@@ -23,7 +23,8 @@ export const blockDataModel = new DataModelBuilder()
     inputAnchor: args?.inputAnchor,
     sequencesRef: args?.sequencesRef ?? [],
     // No V1 source: the previous build derived labels live via a UI hairpin.
-    // First user interaction with the sequences dropdown re-populates them.
+    // Seeded empty here; the UI's auto-select watcher reseeds them from the
+    // current options on load (no user interaction required).
     sequenceLabels: [],
     sequenceType: args?.sequenceType ?? 'aminoacid',
     umap_neighbors: args?.umap_neighbors ?? 15,

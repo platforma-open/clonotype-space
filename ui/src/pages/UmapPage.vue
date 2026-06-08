@@ -104,6 +104,7 @@ const defaultOptions = computed((): PredefinedGraphOption<'scatterplot-umap'>[] 
     umap2 = getIndex('pl7.app/vdj/umap2', umapPcols);
   }
 
+  if (umap1 === -1 || umap2 === -1) return null;
   return [
     { inputName: 'x', selectedSource: umapPcols[umap1].spec },
     { inputName: 'y', selectedSource: umapPcols[umap2].spec },
@@ -152,7 +153,17 @@ watch(
     const currentSelection = app.model.data.sequencesRef;
     const hasInvalidValues = currentSelection.some((v) => !validValues.has(v));
 
-    if (!hasInvalidValues && currentSelection.length > 0) return;
+    if (!hasInvalidValues && currentSelection.length > 0) {
+      // Selection is valid as-is — keep it. But `sequenceLabels` may be empty
+      // (legacy upgrade has no source for them) or out of sync; reseed without
+      // touching the selection so `defaultBlockLabel` recovers its sequence-name
+      // fragment on load instead of leaving the block stale. Deterministic over
+      // options, so the same multi-client idempotency argument holds.
+      if (app.model.data.sequenceLabels.length !== currentSelection.length) {
+        app.model.data.sequenceLabels = labelsForRefs(currentSelection);
+      }
+      return;
+    }
 
     const mainSequences = filteredOptions.filter((o) => o.isMain);
     const defaults = mainSequences.length > 0 ? mainSequences : [filteredOptions[0]];
