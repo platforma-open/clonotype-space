@@ -1,0 +1,27 @@
+self := import("@platforma-sdk/workflow-tengo:tpl")
+pt   := import("@platforma-sdk/workflow-tengo:pt")
+
+self.validateInputs({
+	"__options__,closed": "",
+	spec: "any",
+	data: "any"
+})
+
+self.defineOutputs("minLength")
+
+self.body(func(inputs) {
+	// Reconstruct the column map shape pt expects.
+	lenColumn := { spec: inputs.spec, data: inputs.data }
+
+	// Whole-frame aggregation: emits a single-row TSV with the min value.
+	ptWf := pt.workflow()
+	ptWf.frame(pt.p.column("len", lenColumn)).
+		select(pt.col("len").min().alias("min_len")).
+		saveContent("min_len.ndjson")
+
+	ptResult := ptWf.run()
+
+	return {
+		minLength: ptResult.getFileContent("min_len.ndjson")
+	}
+})

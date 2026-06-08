@@ -1,8 +1,9 @@
-//tengo:hash_override 16D7E7CE-5B0D-4D2C-A8BF-6909B926FA9C
+//tengo:hash_override 16D7E7CE-5B0D-4D2C-A8BF-6909B926FA9D
 
 self := import("@platforma-sdk/workflow-tengo:tpl")
 exec := import("@platforma-sdk/workflow-tengo:exec")
 assets := import("@platforma-sdk/workflow-tengo:assets")
+json := import("json")
 
 self.defineOutputs("umapTsVFile", "umapOutput")
 
@@ -20,6 +21,18 @@ self.body(func(args) {
     if alphabet == "nucleotide" {
         kmerSize = 6
     }
+    encoding := "kmer"
+
+    // Short-peptide override: when the input is peptide-mode AND the shortest
+    // peptide is below 10 aa
+    isPeptide := is_undefined(args.isPeptide) ? false : args.isPeptide
+    if isPeptide && !is_undefined(args.minPeptideLength) {
+        minLen := int(json.decode(string(args.minPeptideLength.getData())).min_len)
+        if minLen < 10 {
+            kmerSize = 2
+            encoding = "pos-kmer"
+        }
+    }
 
     // UMAP software execution
     // Note: --seq-col-start "sequence" will match all columns starting with "sequence"
@@ -36,6 +49,7 @@ self.body(func(args) {
         arg("--umap-min-dist").arg(string(umap_min_dist)).
         arg("--alphabet").arg(alphabet).
         arg("--k-mer-size").arg(string(kmerSize)).
+        arg("--encoding").arg(encoding).
         arg("--n-jobs").arg(string(cpu)).
         saveFile("umap.tsv").
         saveFile("skipped_clonotypes_summary.txt").
