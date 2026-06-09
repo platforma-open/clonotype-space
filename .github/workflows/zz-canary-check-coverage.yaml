@@ -1,0 +1,55 @@
+# TEMPORARY canary — DELETE before merge.
+#
+# Runs milaboratory/github-ci's changeset check-coverage action pinned at
+# @v4-beta (the fixed version) directly against this PR. The normal build
+# chain can't exercise it: build.yaml calls node-simple-pnpm.yaml@v4, whose
+# internal action refs are all pinned at @v4 (the old, over-flagging version).
+# This job bypasses that to prove the @v4-beta behaviour before promoting
+# v4-beta -> v4.
+#
+# Self-contained on purpose: it mirrors the real `changeset coverage`
+# job's setup (checkout full history, prepare-pnpm, install, run the action)
+# but installs with --no-frozen-lockfile so a catalog bump needs no committed
+# lockfile churn.
+name: canary check-coverage @v4-beta
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+jobs:
+  canary-check-coverage:
+    name: canary check-coverage @v4-beta
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: '0'
+
+      - name: Ensure base ref is present
+        run: git fetch origin main:refs/remotes/origin/main
+
+      - name: Prepare pnpm + node
+        uses: milaboratory/github-ci/actions/node/prepare-pnpm@v4
+        env:
+          NPMJS_TOKEN: ${{ secrets.NPMJS_TOKEN }}
+        with:
+          node-version: '20.x'
+          pnpm-version: '9.14.4'
+          npmrc-config: |
+            {
+              "registries": {
+                "https://registry.npmjs.org/": {
+                  "scopes": ["milaboratories", "platforma-sdk", "platforma-open"],
+                  "tokenVar": "NPMJS_TOKEN"
+                }
+              }
+            }
+
+      - name: Install
+        run: pnpm install --no-frozen-lockfile --prefer-offline
+
+      - name: Check changeset coverage (@v4-beta)
+        uses: milaboratory/github-ci/actions/changeset/check-coverage@v4-beta
+        with:
+          base-branch: main

@@ -1081,3 +1081,6 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+# canary (do not merge): touch a software file in the umap package without a
+# changeset, to confirm check-coverage@v4-beta still flags the gap.
