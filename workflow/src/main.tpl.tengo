@@ -46,7 +46,8 @@ wf.body(func(args) {
 		customBlockLabel: args.customBlockLabel,
 		defaultBlockLabel: args.defaultBlockLabel,
 		mem: args.mem,
-		cpu: args.cpu
+		cpu: args.cpu,
+		gpuMemory: args.gpuMemory
 	})
 
 	pfRef := processResult.output("pf")

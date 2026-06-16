@@ -17,6 +17,7 @@ import {
   PlBlockPage,
   PlBtnGhost,
   PlBtnGroup,
+  PlDropdown,
   PlDropdownMulti,
   PlDropdownRef,
   PlLogView,
@@ -343,6 +344,28 @@ watch(
               </template>
             </PlNumberField>
           </div>
+          <PlDropdown
+            v-model="app.model.data.gpuMemory"
+            label="GPU memory (VRAM)"
+            :options="[
+              { value: '', label: 'No GPU (CPU only)' },
+              { value: '1GiB', label: 'Any GPU (1 GiB minimum)' },
+              { value: '16GiB', label: '16 GiB (T4)' },
+              { value: '24GiB', label: '24 GiB (A10G/L4)' },
+              { value: '36GiB', label: '36 GiB' },
+              { value: '48GiB', label: '48 GiB (A6000/L40)' },
+              { value: '60GiB', label: '60 GiB' },
+            ]"
+          >
+            <template #tooltip>
+              <div>
+                <strong>GPU Memory Request</strong><br>
+                Requests a GPU node with at least this much VRAM. The UMAP software uses RAPIDS cuML on GPU when available and falls back to scikit-learn on CPU.<br><br>
+                <strong>Default:</strong> 16 GiB (covers T4-class GPUs)<br><br>
+                Pick <strong>No GPU</strong> to force the CPU path. The request is automatically dropped on backends without GPU support — the block then runs on CPU regardless of the selection.
+              </div>
+            </template>
+          </PlDropdown>
         </PlAccordionSection>
         <PlAlert v-if="isEmpty === true" type="warn" :style="{ width: '320px' }">
           <template #title>Empty dataset selection</template>

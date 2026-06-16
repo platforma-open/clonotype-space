@@ -31,6 +31,7 @@ export const blockDataModel = new DataModelBuilder()
     umap_min_dist: args?.umap_min_dist ?? 0.5,
     cpu: args?.cpu ?? 8,
     mem: args?.mem ?? 64,
+    gpuMemory: '16GiB',
     graphStateUMAP: uiState?.graphStateUMAP ?? defaultGraphState(),
     alignmentModel: uiState?.alignmentModel ?? {},
   }))
@@ -44,6 +45,7 @@ export const blockDataModel = new DataModelBuilder()
     umap_min_dist: 0.5,
     cpu: 8,
     mem: 64,
+    gpuMemory: '16GiB',
     graphStateUMAP: defaultGraphState(),
     alignmentModel: {},
   }));

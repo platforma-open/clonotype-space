@@ -77,6 +77,7 @@ export const platforma = BlockModelV3.create(blockDataModel)
     if (data.umap_min_dist === undefined) throw new Error('UMAP min distance is required');
     if (data.cpu === undefined) throw new Error('CPU is required');
     if (data.mem === undefined) throw new Error('Memory is required');
+    if (data.gpuMemory === undefined) throw new Error('GPU memory is required');
 
     return {
       defaultBlockLabel: computeDefaultLabel(data),
@@ -88,6 +89,7 @@ export const platforma = BlockModelV3.create(blockDataModel)
       umap_min_dist: data.umap_min_dist,
       cpu: data.cpu,
       mem: data.mem,
+      gpuMemory: data.gpuMemory,
     };
   })
 

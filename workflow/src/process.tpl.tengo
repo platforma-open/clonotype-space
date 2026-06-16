@@ -32,6 +32,7 @@ self.body(func(inputs) {
 	defaultBlockLabel := inputs.defaultBlockLabel
 	mem := inputs.mem
 	cpu := inputs.cpu
+	gpuMemory := inputs.gpuMemory
 
 	if is_undefined(umap_neighbors) || is_undefined(umap_min_dist) {
 		ll.panic("umap_neighbors or umap_min_dist is undefined")
@@ -80,7 +81,8 @@ self.body(func(inputs) {
 	}, {
 		metaInputs: {
 			mem: mem,
-			cpu: cpu
+			cpu: cpu,
+			gpuMemory: gpuMemory
 		}
 	})
 	umapTsVFile := umapRender.output("umapTsVFile")
