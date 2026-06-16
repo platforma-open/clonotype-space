@@ -1,3 +1,5 @@
 {
-  "extends": "@milaboratories/ts-configs/block/test"
+  "extends": "@milaboratories/ts-configs/block/test",
+  "include": ["src/**/*"],
+  "files": []
 }

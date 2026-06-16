@@ -1,11 +1,11 @@
-import type { GraphMakerState } from '@milaboratories/graph-maker';
+import type { GraphMakerState } from "@milaboratories/graph-maker";
 import type {
   PlMultiSequenceAlignmentModel,
   PlRef,
   SUniversalPColumnId,
-} from '@platforma-sdk/model';
+} from "@platforma-sdk/model";
 
-export type SequenceType = 'aminoacid' | 'nucleotide';
+export type SequenceType = "aminoacid" | "nucleotide";
 
 /** Unified V3 data: persisted state, shaped on the UI's terms. */
 export type BlockData = {

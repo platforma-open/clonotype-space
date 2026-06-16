@@ -5,9 +5,9 @@ export function getDefaultBlockLabel(data: {
 }) {
   const parts: string[] = [];
   if (data.sequenceLabels.length > 0) {
-    parts.push(data.sequenceLabels.join('+'));
+    parts.push(data.sequenceLabels.join("+"));
   }
   parts.push(`nbrs: ${data.umap_neighbors}`);
   parts.push(`dist: ${data.umap_min_dist}`);
-  return parts.filter(Boolean).join(', ');
+  return parts.filter(Boolean).join(", ");
 }
