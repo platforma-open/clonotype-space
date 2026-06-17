@@ -24,12 +24,14 @@ export type BlockData = {
   cpu: number;
   mem: number;
   /**
-   * GPU memory request as a size string (e.g. "16GiB"). Empty string disables
-   * the GPU request and forces the CPU path. The workflow additionally gates
-   * the `.gpuMemory()` call with `exec.hasGpu` so backends without GPU never
-   * see the request.
+   * When false, the workflow skips the `.gpuMemory()` call and the software
+   * runs on CPU regardless of `gpuMemory`. When true, the workflow gates the
+   * request on `exec.hasGpu` so backends without GPU support fall back to CPU
+   * anyway.
    */
-  gpuMemory: string;
+  requireGpu: boolean;
+  /** GPU memory request in GiB. Only used when `requireGpu` is true. */
+  gpuMemory: number;
   graphStateUMAP: GraphMakerState;
   alignmentModel: PlMultiSequenceAlignmentModel;
 };
@@ -45,7 +47,8 @@ export type BlockArgs = {
   umap_min_dist: number;
   cpu: number;
   mem: number;
-  gpuMemory: string;
+  requireGpu: boolean;
+  gpuMemory: number;
 };
 
 /** Pre-V3 args shape, frozen snapshot for `upgradeLegacy`. */

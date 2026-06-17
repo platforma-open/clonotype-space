@@ -15,6 +15,7 @@ self.body(func(args) {
     alphabet := args.alphabet
     mem := args.mem
     cpu := args.cpu
+    requireGpu := args.requireGpu
     gpuMemory := args.gpuMemory
 
     // Calculate k-mer size based on alphabet
@@ -50,8 +51,8 @@ self.body(func(args) {
         mem(string(mem) + "GiB").
         cpu(cpu)
 
-    if exec.hasGpu && !is_undefined(gpuMemory) && gpuMemory != "" {
-        umapBuilder = umapBuilder.gpuMemory(gpuMemory)
+    if requireGpu && exec.hasGpu {
+        umapBuilder = umapBuilder.gpuMemory(string(gpuMemory) + "GiB")
     }
 
     umapClones := umapBuilder.

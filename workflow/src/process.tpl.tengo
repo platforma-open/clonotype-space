@@ -32,6 +32,7 @@ self.body(func(inputs) {
 	defaultBlockLabel := inputs.defaultBlockLabel
 	mem := inputs.mem
 	cpu := inputs.cpu
+	requireGpu := inputs.requireGpu
 	gpuMemory := inputs.gpuMemory
 
 	if is_undefined(umap_neighbors) || is_undefined(umap_min_dist) {
@@ -82,6 +83,7 @@ self.body(func(inputs) {
 		metaInputs: {
 			mem: mem,
 			cpu: cpu,
+			requireGpu: requireGpu,
 			gpuMemory: gpuMemory
 		}
 	})
