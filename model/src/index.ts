@@ -65,7 +65,7 @@ export const platforma = BlockModelV3.create(blockDataModel)
     if (data.cpu === undefined) throw new Error("CPU is required");
     if (data.mem === undefined) throw new Error("Memory is required");
     if (data.requireGpu === undefined) throw new Error("Require GPU is required");
-    if (data.gpuMemory === undefined) throw new Error("GPU memory is required");
+    if (data.requireGpu && data.gpuMemory === undefined) throw new Error("GPU memory is required");
 
     return {
       defaultBlockLabel: computeDefaultLabel(data),
