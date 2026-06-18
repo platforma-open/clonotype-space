@@ -376,7 +376,12 @@ watch(
             :step="1"
             :required="app.model.data.requireGpu"
             :disabled="!app.model.data.requireGpu"
-            :validate="(value) => (app.model.data.requireGpu && value === undefined ? 'GPU memory is required' : undefined)"
+            :validate="
+              (value) =>
+                app.model.data.requireGpu && value === undefined
+                  ? 'GPU memory is required'
+                  : undefined
+            "
             :style="{ flex: 1 }"
           >
             <template #tooltip>
