@@ -31,8 +31,8 @@ catalogs:
       specifier: 1.7.9
       version: 1.7.9
     '@platforma-sdk/block-tools':
-      specifier: 2.10.17
-      version: 2.10.17
+      specifier: 2.11.0
+      version: 2.11.0
     '@platforma-sdk/eslint-config':
       specifier: 1.2.0
       version: 1.2.0
@@ -98,7 +98,7 @@ importers:
         version: 1.5.1(@types/node@25.0.3)(esbuild@0.27.2)(rollup@4.55.1)(vue@3.5.26(typescript@5.6.3))(yaml@2.8.2)
       '@platforma-sdk/block-tools':
         specifier: 'catalog:'
-        version: 2.10.17(@types/node@25.0.3)
+        version: 2.11.0(@types/node@25.0.3)
       shx:
         specifier: 'catalog:'
         version: 0.4.0
@@ -126,7 +126,7 @@ importers:
     devDependencies:
       '@platforma-sdk/block-tools':
         specifier: 'catalog:'
-        version: 2.10.17(@types/node@25.0.3)
+        version: 2.11.0(@types/node@25.0.3)
       shx:
         specifier: 'catalog:'
         version: 0.4.0
@@ -157,7 +157,7 @@ importers:
         version: 1.2.3
       '@platforma-sdk/block-tools':
         specifier: 'catalog:'
-        version: 2.10.17(@types/node@25.0.3)
+        version: 2.11.0(@types/node@25.0.3)
       '@platforma-sdk/eslint-config':
         specifier: 'catalog:'
         version: 1.2.0(@eslint/js@9.39.2)(@stylistic/eslint-plugin@2.13.0(eslint@9.39.2)(typescript@5.9.3))(eslint-plugin-n@17.23.1(eslint@9.39.2)(typescript@5.9.3))(eslint-plugin-vue@9.33.0(eslint@9.39.2))(eslint@9.39.2)(globals@15.15.0)(typescript-eslint@8.51.0(eslint@9.39.2)(typescript@5.9.3))(typescript@5.9.3)
@@ -1795,6 +1795,10 @@ packages:
 
   '@platforma-sdk/block-tools@2.10.17':
     resolution: {integrity: sha512-bwpAwDyR6G8iZeGRkWc/gVfiXAsjxW14AWPtY4/uoHr3lRYJQOZy1+/hBsgXJPyoIHpoegnXJLgCDTLDyIfadQ==}
+    hasBin: true
+
+  '@platforma-sdk/block-tools@2.11.0':
+    resolution: {integrity: sha512-zJAPVOsgB/XvnlmrhiJUAHDl+MBSolo87nLIQVc+r6oQDDrpySUX4ztuOv/W9i9tnhjoeVeLtbySifmhdAn+Rg==}
     hasBin: true
 
   '@platforma-sdk/blocks-deps-updater@2.2.0':
@@ -8996,6 +9000,30 @@ snapshots:
       '@platforma-open/milaboratories.software-small-binaries.table-converter': 1.3.5
 
   '@platforma-sdk/block-tools@2.10.17(@types/node@25.0.3)':
+    dependencies:
+      '@aws-sdk/client-s3': 3.859.0
+      '@inquirer/prompts': 7.10.1(@types/node@25.0.3)
+      '@milaboratories/pl-http': 1.2.4
+      '@milaboratories/pl-model-backend': 1.4.7
+      '@milaboratories/pl-model-common': 1.46.1
+      '@milaboratories/pl-model-middle-layer': 1.30.6
+      '@milaboratories/resolve-helper': 1.1.3
+      '@milaboratories/ts-helpers': 1.8.3
+      '@milaboratories/ts-helpers-oclif': 1.1.42
+      '@oclif/core': 4.8.0
+      '@platforma-sdk/blocks-deps-updater': 2.2.0
+      canonicalize: 2.1.0
+      lru-cache: 11.2.4
+      mime-types: 2.1.35
+      tar: 7.5.2
+      undici: 7.16.0
+      yaml: 2.8.2
+      zod: 3.25.76
+    transitivePeerDependencies:
+      - '@types/node'
+      - aws-crt
+
+  '@platforma-sdk/block-tools@2.11.0(@types/node@25.0.3)':
     dependencies:
       '@aws-sdk/client-s3': 3.859.0
       '@inquirer/prompts': 7.10.1(@types/node@25.0.3)
