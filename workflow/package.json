@@ -1,9 +1,8 @@
 {
   "name": "@platforma-open/milaboratories.clonotype-space.workflow",
-  "version": "3.3.0",
+  "version": "3.4.0",
   "type": "module",
   "description": "Block Workflow",
-  "type": "module",
   "scripts": {
     "build": "shx rm -rf dist && pl-tengo build",
     "format": "/usr/bin/env emacs --script ./format.el || echo 'No emacs.'",

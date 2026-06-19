@@ -1,6 +1,6 @@
 {
   "name": "@platforma-open/milaboratories.clonotype-space.model",
-  "version": "3.2.1",
+  "version": "3.3.0",
   "description": "Block model",
   "type": "module",
   "main": "dist/index.cjs",
