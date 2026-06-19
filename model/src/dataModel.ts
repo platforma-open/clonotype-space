@@ -28,6 +28,7 @@ export const blockDataModel = new DataModelBuilder()
     cpu: args?.cpu ?? 8,
     mem: args?.mem ?? 64,
     requireGpu: true,
+    gpuMemory: undefined,
     graphStateUMAP: uiState?.graphStateUMAP ?? defaultGraphState(),
     alignmentModel: uiState?.alignmentModel ?? {},
   }))
@@ -42,6 +43,7 @@ export const blockDataModel = new DataModelBuilder()
     cpu: 8,
     mem: 64,
     requireGpu: true,
+    gpuMemory: undefined,
     graphStateUMAP: defaultGraphState(),
     alignmentModel: {},
   }));

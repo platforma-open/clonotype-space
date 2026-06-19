@@ -77,6 +77,7 @@ export const platforma = BlockModelV3.create(blockDataModel)
       cpu: data.cpu,
       mem: data.mem,
       requireGpu: data.requireGpu,
+      gpuMemory: data.gpuMemory,
     };
   })
 

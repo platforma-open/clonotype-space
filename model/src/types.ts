@@ -25,12 +25,17 @@ export type BlockData = {
   mem: number;
   /**
    * When false, the workflow skips the `.gpuMemory()` call and the software
-   * runs on CPU. When true, the workflow picks a `.gpuMemory(...)` value
-   * automatically from the input row count (see `pickGpuMemoryGiB` in
-   * `workflow/src/umap-calculation.tpl.tengo`) and gates the call on
-   * `exec.hasGpu` so backends without GPU support fall back to CPU anyway.
+   * runs on CPU regardless of `gpuMemory`. When true, the workflow gates the
+   * request on `exec.hasGpu` so backends without GPU support fall back to CPU
+   * anyway.
    */
   requireGpu: boolean;
+  /**
+   * GPU memory request in GiB. Empty/undefined leaves the field blank in the
+   * UI; the workflow falls back to 16 GiB when `requireGpu` is true and this
+   * is undefined. Only used when `requireGpu` is true.
+   */
+  gpuMemory?: number;
   graphStateUMAP: GraphMakerState;
   alignmentModel: PlMultiSequenceAlignmentModel;
 };
@@ -47,6 +52,7 @@ export type BlockArgs = {
   cpu: number;
   mem: number;
   requireGpu: boolean;
+  gpuMemory?: number;
 };
 
 /** Pre-V3 args shape, frozen snapshot for `upgradeLegacy`. */
