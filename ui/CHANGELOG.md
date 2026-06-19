@@ -1,5 +1,16 @@
 # @platforma-open/milaboratories.clonotype-space.ui
 
+## 3.2.0
+
+### Minor Changes
+
+- 7991214: Adapt block to embeddings
+
+### Patch Changes
+
+- Updated dependencies [7991214]
+  - @platforma-open/milaboratories.clonotype-space.model@3.2.0
+
 ## 3.1.0
 
 ### Minor Changes

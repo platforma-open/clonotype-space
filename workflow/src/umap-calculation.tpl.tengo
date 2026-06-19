@@ -8,68 +8,84 @@ json := import("json")
 self.defineOutputs("umapTsVFile", "umapOutput")
 
 self.body(func(args) {
-    // Input parameters
-    umapTable := args.umapTable
+    // Input parameters (shared)
     umap_neighbors := args.umap_neighbors
     umap_min_dist := args.umap_min_dist
-    alphabet := args.alphabet
     mem := args.mem
     cpu := args.cpu
     requireGpu := args.requireGpu
     gpuMemory := args.gpuMemory
+    inputMode := is_undefined(args.inputMode) ? "sequence-features" : args.inputMode
 
-    // Calculate k-mer size based on alphabet
-    kmerSize := 3 // default for aminoacid
-    if alphabet == "nucleotide" {
-        kmerSize = 6
-    }
-    encoding := "kmer"
-
-    // Short-peptide override: when the input is peptide-mode AND the shortest
-    // peptide is below 10 aa
-    isPeptide := is_undefined(args.isPeptide) ? false : args.isPeptide
-    if isPeptide && !is_undefined(args.minPeptideLength) {
-        minLen := int(json.decode(string(args.minPeptideLength.getData())).min_len)
-        if minLen < 10 {
-            kmerSize = 2
-            encoding = "pos-kmer"
-        }
-    }
-
-    // UMAP software execution.
-    //
-    // GPU request is gated on exec.hasGpu so the block still works on backends
-    // without GPU support (.gpuMemory() against a no-GPU backend is a permanent
-    // error). The software itself probes for CuPy/cuML at runtime and falls
-    // back to the CPU path if the GPU isn't usable, so dropping the request on
-    // a CPU-only backend just means we land on the existing CPU code path.
-    //
-    // Note: --seq-col-start "sequence" will match all columns starting with "sequence"
-    // (sequence.TRA, sequence.TRB, sequence_0, etc.)
-    umapBuilder := exec.builder().
+    builder := exec.builder().
         software(assets.importSoftware("@platforma-open/milaboratories.clonotype-space.umap:main")).
         mem(string(mem) + "GiB").
         cpu(cpu)
 
     if requireGpu && exec.hasGpu {
-        // 16 GiB fallback when the user leaves the GPU memory field empty —
-        // covers the typical T4-class node and matches the dataset sizes most
-        // clonotype repertoires fall into (<1M unique sequences after dedup).
+        // 16 GiB fallback when the user leaves the GPU memory field empty
         effectiveGpuMemory := is_undefined(gpuMemory) ? 16 : gpuMemory
-        umapBuilder = umapBuilder.gpuMemory(string(effectiveGpuMemory) + "GiB")
+        builder = builder.gpuMemory(string(effectiveGpuMemory) + "GiB")
     }
 
-    umapClones := umapBuilder.
-        addFile("sequences.tsv", umapTable).
-        arg("-i").arg("sequences.tsv").
-        arg("-c").arg("sequence").
-        arg("-u").arg("umap.tsv").
-        arg("--umap-neighbors").arg(string(umap_neighbors)).
-        arg("--umap-min-dist").arg(string(umap_min_dist)).
-        arg("--alphabet").arg(alphabet).
-        arg("--k-mer-size").arg(string(kmerSize)).
-        arg("--encoding").arg(encoding).
-        arg("--n-jobs").arg(string(cpu)).
+    if inputMode == "embedding" {
+        // Embedding feature path: main.py reads the exported Parquet matrix instead of counting k-mers
+        // (--encoding embedding), then runs centered PCA-95% -> L2-normalize -> Euclidean UMAP.
+        builder = builder.
+            addFile("embedding.parquet", args.embeddingMatrix).
+            arg("--encoding").arg("embedding").
+            arg("--matrix").arg("embedding.parquet").
+            arg("--key-col").arg(args.keyCol).
+            arg("--dim-col").arg(args.dimCol).
+            arg("--value-col").arg(args.valueCol).
+            arg("-u").arg("umap.tsv").
+            arg("--umap-neighbors").arg(string(umap_neighbors)).
+            arg("--umap-min-dist").arg(string(umap_min_dist)).
+            arg("--n-jobs").arg(string(cpu))
+
+        // Embedding model: logged to the processing log for provenance. Undefined if the column
+        // lacks the domain key — omit the flag rather than pass an empty string.
+        if !is_undefined(args.embeddingModel) {
+            builder = builder.arg("--embedding-model").arg(args.embeddingModel)
+        }
+    } else {
+        alphabet := args.alphabet
+
+        // Calculate k-mer size based on alphabet
+        kmerSize := 3 // default for aminoacid
+        if alphabet == "nucleotide" {
+            kmerSize = 6
+        }
+        encoding := "kmer"
+
+        // Short-peptide override: when the input is peptide-mode AND the shortest
+        // peptide is below 10 aa
+        isPeptide := is_undefined(args.isPeptide) ? false : args.isPeptide
+        if isPeptide && !is_undefined(args.minPeptideLength) {
+            minLen := int(json.decode(string(args.minPeptideLength.getData())).min_len)
+            if minLen < 10 {
+                kmerSize = 2
+                encoding = "pos-kmer"
+            }
+        }
+
+        // Note: --seq-col-start "sequence" will match all columns starting with "sequence"
+        // (sequence.TRA, sequence.TRB, sequence_0, etc.)
+        builder = builder.
+            addFile("sequences.tsv", args.umapTable).
+            arg("-i").arg("sequences.tsv").
+            arg("-c").arg("sequence").
+            arg("-u").arg("umap.tsv").
+            arg("--umap-neighbors").arg(string(umap_neighbors)).
+            arg("--umap-min-dist").arg(string(umap_min_dist)).
+            arg("--alphabet").arg(alphabet).
+            arg("--k-mer-size").arg(string(kmerSize)).
+            arg("--encoding").arg(encoding).
+            arg("--n-jobs").arg(string(cpu))
+    }
+
+    // UMAP software execution
+    umapClones := builder.
         saveFile("umap.tsv").
         saveFile("skipped_clonotypes_summary.txt").
         saveStdoutStream().
@@ -86,4 +102,3 @@ self.body(func(args) {
         umapOutput: umapOutput
     }
 })
-

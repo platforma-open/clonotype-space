@@ -1,25 +1,45 @@
 // Clonotype space workflow.
 //
-// The outer body runs immediately (no `wf.prepare`) so that exports — and therefore
-// output specs — are defined as soon as possible. The inner `process` template awaits
-// only the PColumnBundle's specs (not its data), enabling early spec export to the
-// result pool. Downstream blocks can configure their inputs while UMAP is still
-// computing.
+// The outer body delegates to the inner `process` template, which awaits only the PColumnBundle's
+// specs (not its data), so exports — and therefore output specs — are published to the result pool as
+// early as possible. Downstream blocks can configure their inputs while UMAP is still computing.
+//
+// Embedding mode adds a `wf.prepare` that resolves the embedding `PlRef` (only when set).
 
 wf := import("@platforma-sdk/workflow-tengo:workflow")
 assets := import("@platforma-sdk/workflow-tengo:assets")
 render := import("@platforma-sdk/workflow-tengo:render")
 pframes := import("@platforma-sdk/workflow-tengo:pframes")
+xsv := import("@platforma-sdk/workflow-tengo:pframes.xsv")
 
 processTpl := assets.importTemplate(":process")
 
+wf.prepare(func(args) {
+	// Resolve the selected embedding column as an explicit input (embedding mode only). This wires its
+	// separate sequence-embeddings producer in as an upstream and pulls the matrix.
+	//
+	// Only add the key when it has a value
+	prepared := {}
+	if !is_undefined(args.embeddingRef) {
+		prepared.resolvedEmbedding = wf.resolve(args.embeddingRef, { errIfMissing: true })
+	}
+
+	return prepared
+})
+
 wf.body(func(args) {
-	// Build PColumn bundle (deferred — resolves asynchronously).
+	inputMode := is_undefined(args.inputMode) ? "sequence-features" : args.inputMode
+	// In embedding mode the args lambda omits sequencesRef (V3 conditional suppression); guard so the
+	// bundle build below iterates an empty list rather than `undefined`.
+	sequencesRef := is_undefined(args.sequencesRef) ? [] : args.sequencesRef
+
+	// Build PColumn bundle (deferred — resolves asynchronously). Provides the dataset spec (output axis
+	// + trace) in both modes; sequence columns are added only in sequence mode.
 	bundleBuilder := wf.createPBundleBuilder()
 	bundleBuilder.ignoreMissingDomains() // make query work for both bulk and single cell data
 	bundleBuilder.addAnchor("main", args.inputAnchor)
 
-	for ref in args.sequencesRef {
+	for ref in sequencesRef {
 		bundleBuilder.addSingle(ref)
 	}
 
@@ -33,22 +53,59 @@ wf.body(func(args) {
 
 	columns := bundleBuilder.build()
 
-	// Delegate to the inner template. Its body runs as soon as upstream specs are
-	// available — does not wait for upstream data.
-	processResult := render.createEphemeral(processTpl, {
+	// Inputs shared by both modes.
+	processInputs := {
 		columns: columns,
 		blockId: wf.blockId().getDataAsJson(),
 		inputAnchor: args.inputAnchor,
-		sequencesRef: args.sequencesRef,
-		sequenceType: args.sequenceType,
+		inputMode: inputMode,
 		umap_neighbors: args.umap_neighbors,
 		umap_min_dist: args.umap_min_dist,
 		customBlockLabel: args.customBlockLabel,
-		defaultBlockLabel: args.defaultBlockLabel,
-		mem: args.mem,
-		cpu: args.cpu,
-		requireGpu: args.requireGpu,
-		gpuMemory: args.gpuMemory
+		defaultBlockLabel: args.defaultBlockLabel
+	}
+
+	if inputMode == "embedding" {
+		// Embedding column resolved in prepare.
+		embeddingCol := args.resolvedEmbedding
+		embSpec := embeddingCol.spec
+		// Model provenance from the column's spec (stamped on the output domain).
+		embeddingModel := embSpec.domain["pl7.app/embedding/model"]
+
+		// Long-format Parquet matrix
+		embeddingMatrix := xsv.exportFrame([embeddingCol], "parquet", {
+			mem: string(args.mem) + "GiB",
+			cpu: 4
+		})
+
+		// Matrix column headers are the embedding column's own axis/value pl7.app/label values, passed
+		// to main.py as --key-col/--dim-col/--value-col. The clonotype axis passes through verbatim from
+		// the dataset and may lack a pl7.app/label, so fall back to "clonotypeKey" — keeps the parquet
+		// header and --key-col in agreement.
+		keyCol := embSpec.axesSpec[0].annotations["pl7.app/label"]
+		if is_undefined(keyCol) {
+			keyCol = "clonotypeKey"
+		}
+
+		processInputs.embeddingMatrix = embeddingMatrix
+		processInputs.embeddingModel = embeddingModel
+		processInputs.keyCol = keyCol
+		processInputs.dimCol = embSpec.axesSpec[1].annotations["pl7.app/label"]
+		processInputs.valueCol = embSpec.annotations["pl7.app/label"]
+	} else {
+		processInputs.sequencesRef = sequencesRef
+		processInputs.sequenceType = args.sequenceType
+	}
+
+	// Delegate to the inner template. Its body runs as soon as upstream specs are available — does not
+	// wait for upstream data.
+	processResult := render.createEphemeral(processTpl, processInputs, {
+		metaInputs: {
+			mem: args.mem,
+			cpu: args.cpu,
+			requireGpu: args.requireGpu,
+			gpuMemory: args.gpuMemory
+		}
 	})
 
 	pfRef := processResult.output("pf")

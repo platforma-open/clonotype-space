@@ -2,8 +2,12 @@
 //
 // Awaits only the PColumnBundle specs (not data), so the body runs — and the output
 // PFrame's specs are published — before upstream column data is computed. The data
-// pipeline (TSV build → UMAP exec → xsv import) is deferred and resolves when its
+// pipeline (TSV/matrix build → UMAP exec → xsv import) is deferred and resolves when its
 // inputs become available.
+//
+// Dispatches on inputMode: 'sequence-features' builds the k-mer TSV and runs the
+// k-mer → SVD → UMAP path; 'embedding' routes the exported Parquet matrix through main.py's
+// embedding feature path and stamps the embedding model on the output domain.
 
 self := import("@platforma-sdk/workflow-tengo:tpl")
 assets := import("@platforma-sdk/workflow-tengo:assets")
@@ -24,8 +28,7 @@ self.body(func(inputs) {
 	columns := inputs.columns
 	blockId := inputs.blockId
 	inputAnchor := inputs.inputAnchor
-	sequencesRef := inputs.sequencesRef
-	alphabet := inputs.sequenceType
+	inputMode := is_undefined(inputs.inputMode) ? "sequence-features" : inputs.inputMode
 	umap_neighbors := inputs.umap_neighbors
 	umap_min_dist := inputs.umap_min_dist
 	customBlockLabel := inputs.customBlockLabel
@@ -42,60 +45,93 @@ self.body(func(inputs) {
 	// Spec is plain JSON, available now (PColumnBundle await covered specs).
 	datasetSpec := columns.getSpec(inputAnchor)
 
-	// compute the shortest peptide length
-	isPeptide := datasetSpec.axesSpec[1].name == "pl7.app/variantKey"
-	minPeptideLength := undefined
-	if isPeptide {
-		peptideLenCols := columns.getColumns("peptideSequenceLength")
-		if len(peptideLenCols) > 0 {
-			minLenResult := render.create(minPeptideLengthTpl, {
-				spec: peptideLenCols[0].spec,
-				data: peptideLenCols[0].data
-			})
-			minPeptideLength = minLenResult.output("minLength")
-		} else {
-			ll.panic("Peptide input is missing required pl7.app/sequenceLength column")
+	// Embedding model: undefined in sequence mode.
+	embeddingModel := undefined
+	umapRender := undefined
+
+	if inputMode == "embedding" {
+		embeddingModel = inputs.embeddingModel
+
+		// Run the embedding UMAP path.
+		umapRender = render.create(umapCalculationTpl, {
+			inputMode: "embedding",
+			embeddingMatrix: inputs.embeddingMatrix,
+			embeddingModel: embeddingModel,
+			keyCol: inputs.keyCol,
+			dimCol: inputs.dimCol,
+			valueCol: inputs.valueCol,
+			umap_neighbors: umap_neighbors,
+			umap_min_dist: umap_min_dist
+		}, {
+			metaInputs: {
+				mem: mem,
+				cpu: cpu,
+				requireGpu: requireGpu,
+				gpuMemory: gpuMemory
+			}
+		})
+	} else {
+		alphabet := inputs.sequenceType
+		sequencesRef := inputs.sequencesRef
+
+		// compute the shortest peptide length
+		isPeptide := datasetSpec.axesSpec[1].name == "pl7.app/variantKey"
+		minPeptideLength := undefined
+		if isPeptide {
+			peptideLenCols := columns.getColumns("peptideSequenceLength")
+			if len(peptideLenCols) > 0 {
+				minLenResult := render.create(minPeptideLengthTpl, {
+					spec: peptideLenCols[0].spec,
+					data: peptideLenCols[0].data
+				})
+				minPeptideLength = minLenResult.output("minLength")
+			} else {
+				ll.panic("Peptide input is missing required pl7.app/sequenceLength column")
+			}
 		}
+
+		// Build input TSV with clonotype id and selected sequence columns.
+		// Column data is a deferred reference here — the TSV builder consumes it lazily.
+		umapTable := pframes.tsvFileBuilder()
+		umapTable.setAxisHeader(datasetSpec.axesSpec[1].name, "clonotypeKey")
+		for nr, seqRef in sequencesRef {
+			seq := columns.getColumn(seqRef)
+			umapTable.add(seq, {header: "sequence_" + string(nr)})
+		}
+		umapTable.mem("16GiB") // TODO: make this dynamic on input size
+		umapTable.cpu(1)
+		umapTable = umapTable.build()
+
+		// Run the UMAP exec template (deferred — its inputs await the TSV above).
+		// mem/cpu are passed via metaInputs so changes to them do not retrigger the umap template.
+		umapRender = render.create(umapCalculationTpl, {
+			inputMode: "sequence-features",
+			umapTable: umapTable,
+			umap_neighbors: umap_neighbors,
+			umap_min_dist: umap_min_dist,
+			alphabet: alphabet,
+			isPeptide: isPeptide,
+			minPeptideLength: minPeptideLength
+		}, {
+			metaInputs: {
+				mem: mem,
+				cpu: cpu,
+				requireGpu: requireGpu,
+				gpuMemory: gpuMemory
+			}
+		})
 	}
 
-	// Build input TSV with clonotype id and selected sequence columns.
-	// Column data is a deferred reference here — the TSV builder consumes it lazily.
-	umapTable := pframes.tsvFileBuilder()
-	umapTable.setAxisHeader(datasetSpec.axesSpec[1].name, "clonotypeKey")
-	for nr, seqRef in sequencesRef {
-		seq := columns.getColumn(seqRef)
-		umapTable.add(seq, {header: "sequence_" + string(nr)})
-	}
-	umapTable.mem("16GiB") // TODO: make this dynamic on input size
-	umapTable.cpu(1)
-	umapTable = umapTable.build()
-
-	// Run the UMAP exec template (deferred — its inputs await the TSV above).
-	// mem/cpu are passed via metaInputs so changes to them do not retrigger the umap template.
-	umapRender := render.create(umapCalculationTpl, {
-		umapTable: umapTable,
-		umap_neighbors: umap_neighbors,
-		umap_min_dist: umap_min_dist,
-		alphabet: alphabet,
-		isPeptide: isPeptide,
-		minPeptideLength: minPeptideLength
-	}, {
-		metaInputs: {
-			mem: mem,
-			cpu: cpu,
-			requireGpu: requireGpu,
-			gpuMemory: gpuMemory
-		}
-	})
 	umapTsVFile := umapRender.output("umapTsVFile")
 	umapOutput := umapRender.output("umapOutput")
 
 	// Import UMAP results to PFrame. `splitDataAndSpec: true` gives us specs (immediate
-	// JSON, derived from the import config) and deferred data references.
+	// JSON, derived from the import config) and deferred data references. In embedding mode the
+	// embedding model is merged into the umap1/umap2 domain; undefined otherwise.
 	umapPf := xsv.importFile(
 		umapTsVFile,
 		"tsv",
-		umapConv.getColumns(datasetSpec, blockId),
+		umapConv.getColumns(datasetSpec, blockId, embeddingModel),
 		{
 			splitDataAndSpec: true,
 			cpu: 1,
