@@ -7,10 +7,20 @@ import type {
 
 export type SequenceType = 'aminoacid' | 'nucleotide';
 
+/**
+ * UMAP feature source.
+ */
+export type InputMode = 'sequence-features' | 'embedding';
+
 /** Unified V3 data: persisted state, shaped on the UI's terms. */
 export type BlockData = {
   customBlockLabel: string;
   inputAnchor?: PlRef;
+  /**
+   * UMAP feature source. Defaulted to `sequence-features` in `init()` and the
+   * `upgradeLegacy` path so existing projects load in sequence mode.
+   */
+  inputMode: InputMode;
   sequencesRef: SUniversalPColumnId[];
   /**
    * Snapshot of human-readable labels for `sequencesRef`, written by the UI in
@@ -19,6 +29,15 @@ export type BlockData = {
    */
   sequenceLabels: string[];
   sequenceType: SequenceType;
+  /**
+   * Embedding column.
+   */
+  embeddingRef?: PlRef;
+  /**
+   * Snapshot of the picked embedding column's native label, written by the UI on
+   * the selection gesture.
+   */
+  selectedEmbeddingLabel: string;
   umap_neighbors: number;
   umap_min_dist: number;
   cpu: number;
@@ -27,13 +46,22 @@ export type BlockData = {
   alignmentModel: PlMultiSequenceAlignmentModel;
 };
 
-/** Projected args consumed by the workflow. */
+/**
+ * Projected args consumed by the workflow. The `.args` lambda branches on
+ * `inputMode` and returns only the active mode's fields plus the shared ones
+ * (V3 conditional suppression): `sequencesRef`/`sequenceType` are present
+ * only in sequence mode, `embeddingRef` only in embedding mode.
+ */
 export type BlockArgs = {
   defaultBlockLabel: string;
   customBlockLabel: string;
   inputAnchor: PlRef;
-  sequencesRef: SUniversalPColumnId[];
-  sequenceType: SequenceType;
+  inputMode: InputMode;
+  // Sequence-features mode (omitted in embedding mode).
+  sequencesRef?: SUniversalPColumnId[];
+  sequenceType?: SequenceType;
+  // Embedding mode (omitted in sequence mode).
+  embeddingRef?: PlRef;
   umap_neighbors: number;
   umap_min_dist: number;
   cpu: number;
