@@ -7,6 +7,19 @@ json := import("json")
 
 self.defineOutputs("umapTsVFile", "umapOutput")
 
+// Pick GPU VRAM (GiB) from input row count. Derived from the empirical
+// peak-VRAM model (SVD U-matrix + cuML UMAP KNN scratch + CUDA context):
+//   peak ≈ 2 + 5·N/1e6 GiB; safe ≈ 2·peak.
+// Rounded up to common GPU classes so the scheduler can match a real node:
+//   T4 (16 GiB), A10G/L4 (24 GiB), A6000/L40 (48 GiB), top-tier (60+ GiB).
+pickGpuMemoryGiB := func(rows) {
+    if rows <= 250000 { return 8 }
+    if rows <= 1000000 { return 16 }
+    if rows <= 2500000 { return 24 }
+    if rows <= 6000000 { return 48 }
+    return 60
+}
+
 self.body(func(args) {
     // Input parameters
     umapTable := args.umapTable
@@ -16,7 +29,11 @@ self.body(func(args) {
     mem := args.mem
     cpu := args.cpu
     requireGpu := args.requireGpu
-    gpuMemory := args.gpuMemory
+
+    // Auto-size GPU memory from input cardinality (computed by the row-count
+    // sub-template). `rowCount` is a tiny ndjson resource: {"n_rows": N}.
+    rows := int(json.decode(string(args.rowCount.getData())).n_rows)
+    gpuMemoryGiB := pickGpuMemoryGiB(rows)
 
     // Calculate k-mer size based on alphabet
     kmerSize := 3 // default for aminoacid
@@ -52,7 +69,7 @@ self.body(func(args) {
         cpu(cpu)
 
     if requireGpu && exec.hasGpu {
-        umapBuilder = umapBuilder.gpuMemory(string(gpuMemory) + "GiB")
+        umapBuilder = umapBuilder.gpuMemory(string(gpuMemoryGiB) + "GiB")
     }
 
     umapClones := umapBuilder.

@@ -16,6 +16,7 @@ umapConv := import(":pf-umap-conv")
 
 umapCalculationTpl := assets.importTemplate(":umap-calculation")
 minPeptideLengthTpl := assets.importTemplate(":min-peptide-length")
+rowCountTpl := assets.importTemplate(":row-count")
 
 // Await only column specs — NOT data. This is what enables early spec export.
 self.awaitState("columns", "PColumnBundle")
@@ -33,7 +34,6 @@ self.body(func(inputs) {
 	mem := inputs.mem
 	cpu := inputs.cpu
 	requireGpu := inputs.requireGpu
-	gpuMemory := inputs.gpuMemory
 
 	if is_undefined(umap_neighbors) || is_undefined(umap_min_dist) {
 		ll.panic("umap_neighbors or umap_min_dist is undefined")
@@ -70,21 +70,31 @@ self.body(func(inputs) {
 	umapTable.cpu(1)
 	umapTable = umapTable.build()
 
+	// Row count of the first sequence column drives automatic gpuMemory sizing
+	// inside umap-calculation. All sequences-ref columns share the same axis,
+	// so any one of them yields the correct cardinality.
+	firstSeq := columns.getColumn(sequencesRef[0])
+	rowCountResult := render.create(rowCountTpl, {
+		spec: firstSeq.spec,
+		data: firstSeq.data
+	})
+	rowCount := rowCountResult.output("rowCount")
+
 	// Run the UMAP exec template (deferred — its inputs await the TSV above).
-	// mem/cpu are passed via metaInputs so changes to them do not retrigger the umap template.
+	// mem/cpu/requireGpu are passed via metaInputs so changes to them do not retrigger the umap template.
 	umapRender := render.create(umapCalculationTpl, {
 		umapTable: umapTable,
 		umap_neighbors: umap_neighbors,
 		umap_min_dist: umap_min_dist,
 		alphabet: alphabet,
 		isPeptide: isPeptide,
-		minPeptideLength: minPeptideLength
+		minPeptideLength: minPeptideLength,
+		rowCount: rowCount
 	}, {
 		metaInputs: {
 			mem: mem,
 			cpu: cpu,
-			requireGpu: requireGpu,
-			gpuMemory: gpuMemory
+			requireGpu: requireGpu
 		}
 	})
 	umapTsVFile := umapRender.output("umapTsVFile")

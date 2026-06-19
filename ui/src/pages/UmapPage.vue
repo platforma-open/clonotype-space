@@ -25,6 +25,7 @@ import {
   PlNumberField,
   PlSlideModal,
   PlTextField,
+  PlTooltip,
 } from "@platforma-sdk/ui-vue";
 
 import type { PredefinedGraphOption } from "@milaboratories/graph-maker";
@@ -366,34 +367,19 @@ watch(
               </template>
             </PlNumberField>
           </div>
-          <PlCheckbox v-model="app.model.data.requireGpu"> Require run on GPU </PlCheckbox>
-          <PlNumberField
-            v-model="app.model.data.gpuMemory"
-            label="GPU memory (GB)"
-            placeholder="16"
-            :min="1"
-            :max="64"
-            :step="1"
-            :required="app.model.data.requireGpu"
-            :disabled="!app.model.data.requireGpu"
-            :validate="
-              (value) =>
-                app.model.data.requireGpu && value === undefined
-                  ? 'GPU memory is required'
-                  : undefined
-            "
-            :style="{ flex: 1 }"
-          >
+          <PlTooltip position="left">
+            <PlCheckbox v-model="app.model.data.requireGpu">Require run on GPU</PlCheckbox>
             <template #tooltip>
               <div>
-                <strong>GPU Memory Request (GB)</strong><br />
-                Requests a GPU node with at least this much GB. The UMAP software uses RAPIDS cuML
-                on GPU when available and falls back to scikit-learn on CPU.<br /><br />
+                <strong>Require GPU for UMAP</strong><br />
+                When enabled, the workflow asks the scheduler for a GPU node. The required VRAM is
+                computed automatically from the input row count — small datasets get a T4-class GPU,
+                larger ones get A10G/L4 or A6000/L40 sized nodes.<br /><br />
                 On backends without GPU support the request is dropped automatically — the block
-                runs on CPU regardless of this value.
+                still runs on CPU. Uncheck to force the CPU path regardless of available hardware.
               </div>
             </template>
-          </PlNumberField>
+          </PlTooltip>
         </PlAccordionSection>
         <PlAlert v-if="isEmpty === true" type="warn" :style="{ width: '320px' }">
           <template #title>Empty dataset selection</template>
