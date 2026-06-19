@@ -20,5 +20,20 @@
     "typescript": "catalog:",
     "shx": "catalog:"
   },
-  "packageManager": "pnpm@9.14.4"
+  "packageManager": "pnpm@9.14.4",
+  "//pnpm": {
+    "overrides": {
+      "@milaboratories/pf-plots": "link:../../core/visualizations/packages/pf-plots",
+      "@milaboratories/multi-sequence-alignment": "link:../../core/visualizations/packages/multi-sequence-alignment",
+      "@platforma-sdk/model": "file:../../core/platforma/sdk/model/package.tgz",
+      "@platforma-sdk/ui-vue": "file:../../core/platforma/sdk/ui-vue/package.tgz",
+      "@milaboratories/pl-model-common": "file:../../core/platforma/lib/model/common/package.tgz",
+      "@milaboratories/pl-model-middle-layer": "file:../../core/platforma/lib/model/middle-layer/package.tgz",
+      "@milaboratories/helpers": "file:../../core/platforma/lib/util/helpers/package.tgz",
+      "@milaboratories/pl-error-like": "file:../../core/platforma/lib/model/pl-error-like/package.tgz",
+      "@milaboratories/ptabler-expression-js": "file:../../core/platforma/lib/ptabler/js/package.tgz",
+      "@milaboratories/pf-spec-driver": "file:../../core/platforma/lib/model/pf-spec-driver/package.tgz",
+      "@milaboratories/uikit": "file:../../core/platforma/lib/ui/uikit/package.tgz"
+    }
+  }
 }
