@@ -1122,7 +1122,9 @@ def _pca_reduce_sklearn(X_fit, X_all, ncomp):
     print("Using CPU-based centered PCA (scikit-learn, svd_solver='full')...")
     pca = PCA(n_components=ncomp, svd_solver='full').fit(X_fit)  # centered by default
     k = min(_select_k_for_variance(pca.explained_variance_ratio_), ncomp)
-    return pca.transform(X_all)[:, :k].astype(np.float32), k
+    Xr = pca.transform(X_all)[:, :k].astype(np.float32)
+    _mark_exec('svd', 'CPU', 'sklearn PCA-95% (embedding mode)')
+    return Xr, k
 
 
 def _pca_reduce_cuml(X_fit, X_all, ncomp):
@@ -1142,6 +1144,7 @@ def _pca_reduce_cuml(X_fit, X_all, ncomp):
         evr = np.asarray(evr)
         k = min(_select_k_for_variance(evr), ncomp)
         Xr = np.asarray(pca.transform(X_all))
+    _mark_exec('svd', 'GPU', 'cuML PCA-95% (embedding mode)')
     return Xr[:, :k].astype(np.float32), k
 
 
@@ -1193,15 +1196,18 @@ def run_embedding_umap(Xn, umap_model, run_type, args):
     on L2-normalized vectors is a monotonic function of cosine similarity. Returns (n, 2) coords."""
     n = Xn.shape[0]
     start = time.time()
+    fell_back = False
     if run_type == 'gpu':
         try:
             coords = np.asarray(umap_model.fit_transform(Xn))
+            _mark_exec('umap', 'GPU', 'cuML UMAP.fit_transform() returned (embedding mode)')
             print(f"UMAP (GPU) completed in {time.time() - start:.2f} seconds.\n")
             return coords
         except Exception as e:  # noqa: BLE001
             print(f"Warning: GPU UMAP failed - {e}. Falling back to CPU UMAP...")
             umap_model, run_type = create_umap_model(
                 'sklearn', args.umap_components, args.umap_neighbors, args.umap_min_dist)
+            fell_back = True
 
     # Isolated, seeded RNG (deterministic, doesn't touch global numpy state) — matches _fit_sample.
     rng = np.random.default_rng(RANDOM_STATE)
@@ -1213,6 +1219,12 @@ def run_embedding_umap(Xn, umap_model, run_type, args):
     else:
         umap_model.fit(Xn)
     coords = np.asarray(umap_model.transform(Xn))
+    detail = (
+        'umap-learn fit+transform (embedding mode, fallback after GPU UMAP failure)'
+        if fell_back
+        else 'umap-learn fit+transform (embedding mode)'
+    )
+    _mark_exec('umap', 'CPU', detail)
     print(f"UMAP (CPU) completed in {time.time() - start:.2f} seconds.\n")
     return coords
 
