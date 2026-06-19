@@ -1,5 +1,16 @@
 # @platforma-open/milaboratories.clonotype-space.workflow
 
+## 3.3.0
+
+### Minor Changes
+
+- 7991214: Adapt block to embeddings
+
+### Patch Changes
+
+- Updated dependencies [7991214]
+  - @platforma-open/milaboratories.clonotype-space.umap@2.15.0
+
 ## 3.2.0
 
 ### Minor Changes

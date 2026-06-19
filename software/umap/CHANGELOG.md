@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.umap
 
+## 2.15.0
+
+### Minor Changes
+
+- 7991214: Adapt block to embeddings
+
 ## 2.14.0
 
 ### Minor Changes
