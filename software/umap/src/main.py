@@ -1032,8 +1032,11 @@ def load_embedding_matrix(path, key_col, dim_col, value_col):
 
 
 def l2_normalize(X, eps=1e-12):
-    """Row-wise L2-normalize, eps-guarded so a zero row can't 0/0. Returns float32."""
-    return (X / (np.linalg.norm(X, axis=1, keepdims=True) + eps)).astype(np.float32)
+    """Row-wise L2-normalize, eps-guarded so a zero row can't 0/0. Returns float32.
+    Uses np.maximum(norm, eps) (not norm+eps) so valid vectors stay exactly unit-norm — only a
+    near-zero row is clamped."""
+    norm = np.linalg.norm(X, axis=1, keepdims=True)
+    return (X / np.maximum(norm, eps)).astype(np.float32)
 
 
 def _select_k_for_variance(explained_variance_ratio, target=SVD_TARGET_VARIANCE):
@@ -1133,11 +1136,12 @@ def run_embedding_umap(Xn, umap_model, run_type, args):
             umap_model, run_type = create_umap_model(
                 'sklearn', args.umap_components, args.umap_neighbors, args.umap_min_dist)
 
-    np.random.seed(RANDOM_STATE)
+    # Isolated, seeded RNG (deterministic, doesn't touch global numpy state) — matches _fit_sample.
+    rng = np.random.default_rng(RANDOM_STATE)
     if n > UMAP_FIT_MAX_SAMPLE_SIZE:
         print(f"Fit sample ({n}) > {UMAP_FIT_MAX_SAMPLE_SIZE}. "
               f"Sampling {UMAP_FIT_MAX_SAMPLE_SIZE} vectors for UMAP fitting.")
-        idx = np.random.choice(n, size=UMAP_FIT_MAX_SAMPLE_SIZE, replace=False)
+        idx = rng.choice(n, size=UMAP_FIT_MAX_SAMPLE_SIZE, replace=False)
         umap_model.fit(Xn[idx])
     else:
         umap_model.fit(Xn)
@@ -1212,8 +1216,6 @@ def run_embedding_mode(args, output_path):
     if n_degenerate:
         print(f"Warning: {n_degenerate} unique vector(s) near-zero norm post-PCA "
               f"(centered-PCA residual ≈ dataset mean) — excluded from the UMAP fit, null coords.")
-    Xn = l2_normalize(Xr)
-
     n_valid = int(valid.sum())
     if n_valid < min_required:
         print(f"Warning: Not enough non-degenerate vectors for UMAP "
@@ -1223,12 +1225,16 @@ def run_embedding_mode(args, output_path):
                                      "UMAP analysis skipped due to insufficient non-degenerate vectors.")
         return
 
+    # Normalize only the valid (non-degenerate) rows we actually fit/transform — avoids dividing a
+    # near-zero residual by eps and amplifying numerical noise into rows we'd then discard.
+    Xn_valid = l2_normalize(Xr[valid])
+
     umap_model, run_type = create_umap_model(
         args.umap_backend, args.umap_components, args.umap_neighbors, args.umap_min_dist)
 
     print(f"Running UMAP on {n_valid} non-degenerate unique vectors "
           f"(L2-normalized, Euclidean ≡ cosine)...")
-    coords_valid = run_embedding_umap(Xn[valid], umap_model, run_type, args)
+    coords_valid = run_embedding_umap(Xn_valid, umap_model, run_type, args)
 
     # Degenerate uniques get NaN coords; assemble the full unique-coord matrix, then broadcast to every
     # clonotype via the dedup inverse index. NaN rows surface as null coords downstream.
