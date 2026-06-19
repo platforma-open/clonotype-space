@@ -17,12 +17,27 @@ self.body(func(args) {
     gpuMemory := args.gpuMemory
     inputMode := is_undefined(args.inputMode) ? "sequence-features" : args.inputMode
 
+    // When the umap exec actually lands on a GPU node, the heavy memory users
+    // (SVD U-matrix, UMAP KNN/iter buffers, dense embedding for the fit) live in
+    // VRAM, not RAM. Empirically the CPU path peaks at ~4× the GPU path's
+    // host-RAM footprint, so divide by 4 — with an 8 GiB floor for the k-mer
+    // multiprocess pool, Python interpreter overhead, and polars/scipy
+    // working sets that the GPU path can't avoid.
+    useGpu := requireGpu && exec.hasGpu
+    effectiveMem := mem
+    if useGpu {
+        effectiveMem = mem / 4
+        if effectiveMem < 8 {
+            effectiveMem = 8
+        }
+    }
+
     builder := exec.builder().
         software(assets.importSoftware("@platforma-open/milaboratories.clonotype-space.umap:main")).
-        mem(string(mem) + "GiB").
+        mem(string(effectiveMem) + "GiB").
         cpu(cpu)
 
-    if requireGpu && exec.hasGpu {
+    if useGpu {
         // 16 GiB fallback when the user leaves the GPU memory field empty
         effectiveGpuMemory := is_undefined(gpuMemory) ? 16 : gpuMemory
         builder = builder.gpuMemory(string(effectiveGpuMemory) + "GiB")
