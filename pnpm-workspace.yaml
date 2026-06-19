@@ -1,10 +1,10 @@
 packages:
-  - software/umap
-  - workflow
-  - model
-  - ui
   - block
+  - model
+  - software/umap
   - test
+  - ui
+  - workflow
 
 catalog:
   # SDK packages - EXACT VERSIONS (no ^ or ~)

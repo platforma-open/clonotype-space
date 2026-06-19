@@ -12,11 +12,16 @@
     "index.js"
   ],
   "dependencies": {
-    "@platforma-sdk/model": "catalog:",
-    "@platforma-open/milaboratories.clonotype-space.workflow": "workspace:*",
     "@platforma-open/milaboratories.clonotype-space.model": "workspace:*",
-    "@platforma-open/milaboratories.clonotype-space.ui": "workspace:*"
+    "@platforma-open/milaboratories.clonotype-space.ui": "workspace:*",
+    "@platforma-open/milaboratories.clonotype-space.workflow": "workspace:*",
+    "@platforma-sdk/model": "catalog:"
   },
+  "devDependencies": {
+    "@platforma-sdk/block-tools": "catalog:",
+    "shx": "catalog:"
+  },
+  "packageManager": "pnpm@9.14.4",
   "block": {
     "components": {
       "workflow": "@platforma-open/milaboratories.clonotype-space.workflow/dist/tengo/tpl/main.plj.gz",
@@ -34,7 +39,8 @@
       "tags": [
         "airr",
         "downstream",
-        "peptide"
+        "peptide",
+        "gpu"
       ],
       "organization": {
         "name": "MiLaboratories Inc",
@@ -42,9 +48,5 @@
         "logo": "file:../logos/organization-logo.png"
       }
     }
-  },
-  "devDependencies": {
-    "@platforma-sdk/block-tools": "catalog:"
-  },
-  "packageManager": "pnpm@9.14.4"
+  }
 }

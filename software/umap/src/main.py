@@ -126,6 +126,27 @@ print = functools.partial(print, flush=True)
 
 
 # ============================================================================
+# Execution tracker
+# ============================================================================
+
+# Records which backend actually ran each compute stage. Populated by
+# _mark_exec() at the exact point where the GPU or CPU library returned a
+# result; the closing summary in main() reports these so the user has a
+# ground-truth record, not just intent-of-use logs.
+_EXEC = {'svd': None, 'umap': None}
+
+
+def _mark_exec(stage, backend, detail=''):
+    """Stamp a definitive execution marker once a compute stage actually completes."""
+    _EXEC[stage] = backend
+    bar = '=' * 64
+    suffix = f' — {detail}' if detail else ''
+    print(bar)
+    print(f'>>> {stage.upper()} EXECUTED ON {backend}{suffix}')
+    print(bar)
+
+
+# ============================================================================
 # SVD components wrapper
 # ============================================================================
 
@@ -452,6 +473,46 @@ def get_gpu_memory_info():
     return free / (1024 ** 3), total / (1024 ** 3)
 
 
+def log_gpu_status():
+    """
+    Print a single, prominent log line stating whether the GPU pipeline is
+    usable in this run. Probes the same imports + CUDA handshake that
+    create_svd_model / create_umap_model do later, so a "GPU IN USE" banner
+    here is a reliable predictor of which code path runs.
+    """
+    try:
+        import cuml  # noqa: F401
+        import cupy as cp
+    except Exception as e:
+        print(f"GPU STATUS: NOT IN USE - cuML/CuPy import failed ({type(e).__name__}: {e}). "
+              f"Running on CPU.")
+        return
+
+    try:
+        device_count = cp.cuda.runtime.getDeviceCount()
+    except Exception as e:
+        print(f"GPU STATUS: NOT IN USE - no CUDA device visible "
+              f"({type(e).__name__}: {e}). Running on CPU.")
+        return
+
+    if device_count == 0:
+        print("GPU STATUS: NOT IN USE - CUDA reports 0 devices. Running on CPU.")
+        return
+
+    try:
+        dev = cp.cuda.Device(0)
+        props = cp.cuda.runtime.getDeviceProperties(0)
+        name = props['name'].decode() if isinstance(props['name'], bytes) else props['name']
+        free_gb, total_gb = dev.mem_info
+        free_gb /= 1024 ** 3
+        total_gb /= 1024 ** 3
+        print(f"GPU STATUS: IN USE - {name} ({total_gb:.1f} GiB VRAM, {free_gb:.1f} GiB free). "
+              f"Will use RAPIDS cuML SVD/UMAP path.")
+    except Exception as e:
+        print(f"GPU STATUS: NOT IN USE - CUDA device probe failed "
+              f"({type(e).__name__}: {e}). Running on CPU.")
+
+
 def compute_explained_variance_cupy(singular_values, matrix_gpu, n_samples):
     """Compute explained variance ratio from CuPy SVD singular values."""
     import cupy as cp
@@ -477,6 +538,7 @@ def fallback_to_cpu_svd(matrix, n_components):
     print("Falling back to CPU-based SVD...")
     svd_model, _ = create_svd_model('sklearn', n_components, random_state=RANDOM_STATE)
     svd_model.fit(matrix)
+    _mark_exec('svd', 'CPU', 'sklearn TruncatedSVD.fit() returned')
     return svd_model, svd_model.explained_variance_ratio_
 
 
@@ -550,7 +612,7 @@ def compute_svd_embedding(matrix, svd_backend='auto',
                         f"(total variance = {total_explained:.4f}). "
                     )
                 use_cupy_sparse_svd = True
-                print("GPU sparse SVD completed successfully.")
+                _mark_exec('svd', 'GPU', 'CuPy sparse svds() returned')
             else:
                 print("Warning: Insufficient GPU memory for sparse operations.")
                 print(f"Required: ~{required_mem_gb:.2f} GB, Available: {free_gb:.2f} GB")
@@ -597,6 +659,8 @@ def compute_svd_embedding(matrix, svd_backend='auto',
             print(f"Warning: GPU SVD transform failed: {e}")
             svd_model, _ = create_svd_model('sklearn', n_components_optimal, random_state=RANDOM_STATE)
             svd_embed = svd_model.fit_transform(matrix)
+            # Overwrites the earlier GPU mark — the recovery path lands on sklearn.
+            _mark_exec('svd', 'CPU', 'sklearn fit_transform() recovered after GPU transform failure')
             explained_var_sum = float(svd_model.explained_variance_ratio_.sum())
             svd_transformer = _SVDTransformer(svd_model.components_)
     else:
@@ -852,6 +916,7 @@ def run_gpu_pipeline(args, sequences_all, umap_model):
     print("Running UMAP dimensionality reduction (fitting and transforming on GPU)...")
     try:
         umap_embed_all = umap_model.fit_transform(svd_embed)
+        _mark_exec('umap', 'GPU', 'cuML UMAP.fit_transform() returned')
         print(f"UMAP completed in {time.time() - start_time_umap:.2f} seconds.\n")
         return umap_embed_all
     except Exception as e:
@@ -867,6 +932,7 @@ def run_gpu_pipeline(args, sequences_all, umap_model):
     else:
         cpu_umap_model.fit(svd_embed)
     umap_embed_all = cpu_umap_model.transform(svd_embed)
+    _mark_exec('umap', 'CPU', 'umap-learn fallback after GPU UMAP failure')
     print(f"UMAP (CPU fallback) completed in {time.time() - start_time_umap:.2f} seconds.\n")
     return umap_embed_all
 
@@ -940,6 +1006,7 @@ def run_cpu_pipeline(args, df_valid, sequences_all, umap_model):
     start_time_umap_fit = time.time()
     print("Running UMAP dimensionality reduction (fitting model)...")
     umap_model.fit(sampled_data_for_fit)
+    _mark_exec('umap', 'CPU', 'umap-learn UMAP.fit() returned')
     print(f"UMAP model fitting completed in {time.time() - start_time_umap_fit:.2f} seconds.\n")
 
     # --- Phase 2: transform ALL valid sequences in chunks ---
@@ -1055,7 +1122,9 @@ def _pca_reduce_sklearn(X_fit, X_all, ncomp):
     print("Using CPU-based centered PCA (scikit-learn, svd_solver='full')...")
     pca = PCA(n_components=ncomp, svd_solver='full').fit(X_fit)  # centered by default
     k = min(_select_k_for_variance(pca.explained_variance_ratio_), ncomp)
-    return pca.transform(X_all)[:, :k].astype(np.float32), k
+    Xr = pca.transform(X_all)[:, :k].astype(np.float32)
+    _mark_exec('svd', 'CPU', 'sklearn PCA-95% (embedding mode)')
+    return Xr, k
 
 
 def _pca_reduce_cuml(X_fit, X_all, ncomp):
@@ -1075,6 +1144,7 @@ def _pca_reduce_cuml(X_fit, X_all, ncomp):
         evr = np.asarray(evr)
         k = min(_select_k_for_variance(evr), ncomp)
         Xr = np.asarray(pca.transform(X_all))
+    _mark_exec('svd', 'GPU', 'cuML PCA-95% (embedding mode)')
     return Xr[:, :k].astype(np.float32), k
 
 
@@ -1126,15 +1196,18 @@ def run_embedding_umap(Xn, umap_model, run_type, args):
     on L2-normalized vectors is a monotonic function of cosine similarity. Returns (n, 2) coords."""
     n = Xn.shape[0]
     start = time.time()
+    fell_back = False
     if run_type == 'gpu':
         try:
             coords = np.asarray(umap_model.fit_transform(Xn))
+            _mark_exec('umap', 'GPU', 'cuML UMAP.fit_transform() returned (embedding mode)')
             print(f"UMAP (GPU) completed in {time.time() - start:.2f} seconds.\n")
             return coords
         except Exception as e:  # noqa: BLE001
             print(f"Warning: GPU UMAP failed - {e}. Falling back to CPU UMAP...")
             umap_model, run_type = create_umap_model(
                 'sklearn', args.umap_components, args.umap_neighbors, args.umap_min_dist)
+            fell_back = True
 
     # Isolated, seeded RNG (deterministic, doesn't touch global numpy state) — matches _fit_sample.
     rng = np.random.default_rng(RANDOM_STATE)
@@ -1146,6 +1219,12 @@ def run_embedding_umap(Xn, umap_model, run_type, args):
     else:
         umap_model.fit(Xn)
     coords = np.asarray(umap_model.transform(Xn))
+    detail = (
+        'umap-learn fit+transform (embedding mode, fallback after GPU UMAP failure)'
+        if fell_back
+        else 'umap-learn fit+transform (embedding mode)'
+    )
+    _mark_exec('umap', 'CPU', detail)
     print(f"UMAP (CPU) completed in {time.time() - start:.2f} seconds.\n")
     return coords
 
@@ -1347,6 +1426,16 @@ def main():
               f"UMAP Backend={args.umap_backend.upper()}, "
               f"max-sequences={max_seq_str}")
 
+    # Banner-style GPU/CPU pipeline indicator, printed before any heavy work so
+    # the user can confirm at a glance which path will run. Honors --svd-backend
+    # and --umap-backend overrides: if either is pinned to 'sklearn', the GPU
+    # never runs regardless of hardware.
+    if args.svd_backend == 'sklearn' and args.umap_backend == 'sklearn':
+        print("GPU STATUS: NOT IN USE - both backends pinned to sklearn (CPU). "
+              "Pass --svd-backend auto / --umap-backend auto to allow GPU.")
+    else:
+        log_gpu_status()
+
     validate_args(args)
 
     output_path = os.path.join(args.output_dir, args.umap_output)
@@ -1433,6 +1522,15 @@ def main():
           f"{time.time() - start_time_save:.2f} seconds.")
 
     print(f"\nTotal analysis completed in {time.time() - start_time_load:.2f} seconds.")
+
+    # Ground-truth summary: reports the backend that actually ran each stage,
+    # populated by _mark_exec() at the exact return site of the compute call.
+    svd_actual = _EXEC['svd'] or 'UNKNOWN'
+    umap_actual = _EXEC['umap'] or 'UNKNOWN'
+    bar = '=' * 64
+    print('\n' + bar)
+    print(f'COMPUTATION SUMMARY: SVD={svd_actual}, UMAP={umap_actual}')
+    print(bar)
 
     if args.store_models and args.umap_backend == 'parametric-umap':
         umap_model.save(args.output_dir)

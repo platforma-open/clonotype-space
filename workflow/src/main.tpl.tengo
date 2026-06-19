@@ -102,7 +102,9 @@ wf.body(func(args) {
 	processResult := render.createEphemeral(processTpl, processInputs, {
 		metaInputs: {
 			mem: args.mem,
-			cpu: args.cpu
+			cpu: args.cpu,
+			requireGpu: args.requireGpu,
+			gpuMemory: args.gpuMemory
 		}
 	})
 

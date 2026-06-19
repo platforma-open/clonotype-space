@@ -1,16 +1,16 @@
-import type { GraphMakerState } from '@milaboratories/graph-maker';
+import type { GraphMakerState } from "@milaboratories/graph-maker";
 import type {
   PlMultiSequenceAlignmentModel,
   PlRef,
   SUniversalPColumnId,
-} from '@platforma-sdk/model';
+} from "@platforma-sdk/model";
 
-export type SequenceType = 'aminoacid' | 'nucleotide';
+export type SequenceType = "aminoacid" | "nucleotide";
 
 /**
  * UMAP feature source.
  */
-export type InputMode = 'sequence-features' | 'embedding';
+export type InputMode = "sequence-features" | "embedding";
 
 /** Unified V3 data: persisted state, shaped on the UI's terms. */
 export type BlockData = {
@@ -42,6 +42,19 @@ export type BlockData = {
   umap_min_dist: number;
   cpu: number;
   mem: number;
+  /**
+   * When false, the workflow skips the `.gpuMemory()` call and the software
+   * runs on CPU regardless of `gpuMemory`. When true, the workflow gates the
+   * request on `exec.hasGpu` so backends without GPU support fall back to CPU
+   * anyway.
+   */
+  requireGpu: boolean;
+  /**
+   * GPU memory request in GiB. Empty/undefined leaves the field blank in the
+   * UI; the workflow falls back to 16 GiB when `requireGpu` is true and this
+   * is undefined. Only used when `requireGpu` is true.
+   */
+  gpuMemory?: number;
   graphStateUMAP: GraphMakerState;
   alignmentModel: PlMultiSequenceAlignmentModel;
 };
@@ -66,6 +79,8 @@ export type BlockArgs = {
   umap_min_dist: number;
   cpu: number;
   mem: number;
+  requireGpu: boolean;
+  gpuMemory?: number;
 };
 
 /** Pre-V3 args shape, frozen snapshot for `upgradeLegacy`. */

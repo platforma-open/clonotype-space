@@ -1,15 +1,15 @@
 <script setup lang="ts">
-import { getDefaultBlockLabel } from '@platforma-open/milaboratories.clonotype-space.model';
+import { getDefaultBlockLabel } from "@platforma-open/milaboratories.clonotype-space.model";
 import type {
   PColumnIdAndSpec,
   PlRef,
   PlSelectionModel,
   SUniversalPColumnId,
-} from '@platforma-sdk/model';
-import { getRawPlatformaInstance } from '@platforma-sdk/model';
+} from "@platforma-sdk/model";
+import { getRawPlatformaInstance } from "@platforma-sdk/model";
 
-import { PlMultiSequenceAlignment } from '@milaboratories/multi-sequence-alignment';
-import strings from '@milaboratories/strings';
+import { PlMultiSequenceAlignment } from "@milaboratories/multi-sequence-alignment";
+import strings from "@milaboratories/strings";
 import {
   listToOptions,
   PlAccordionSection,
@@ -17,6 +17,7 @@ import {
   PlBlockPage,
   PlBtnGhost,
   PlBtnGroup,
+  PlCheckbox,
   PlDropdownMulti,
   PlDropdownRef,
   PlLogView,
@@ -24,19 +25,19 @@ import {
   PlNumberField,
   PlSlideModal,
   PlTextField,
-} from '@platforma-sdk/ui-vue';
+} from "@platforma-sdk/ui-vue";
 
-import type { PredefinedGraphOption } from '@milaboratories/graph-maker';
-import { GraphMaker } from '@milaboratories/graph-maker';
-import { asyncComputed } from '@vueuse/core';
-import { computed, ref, watch } from 'vue';
+import type { PredefinedGraphOption } from "@milaboratories/graph-maker";
+import { GraphMaker } from "@milaboratories/graph-maker";
+import { asyncComputed } from "@vueuse/core";
+import { computed, ref, watch } from "vue";
 
-import { useApp } from '../app';
-import { isSequenceColumn } from '../util';
+import { useApp } from "../app";
+import { isSequenceColumn } from "../util";
 
 const app = useApp();
 
-const sequenceType = listToOptions(['aminoacid', 'nucleotide']);
+const sequenceType = listToOptions(["aminoacid", "nucleotide"]);
 
 // Filter sequence options by selected sequence type
 const filteredSequenceOptions = computed(() => {
@@ -47,15 +48,15 @@ const filteredSequenceOptions = computed(() => {
 });
 
 const defaultLabel = computed(() =>
-  app.model.data.inputMode === 'embedding'
+  app.model.data.inputMode === "embedding"
     ? getDefaultBlockLabel({
-        inputMode: 'embedding',
-        embeddingLabel: app.model.data.selectedEmbeddingLabel ?? '',
+        inputMode: "embedding",
+        embeddingLabel: app.model.data.selectedEmbeddingLabel ?? "",
         umap_neighbors: app.model.data.umap_neighbors,
         umap_min_dist: app.model.data.umap_min_dist,
       })
     : getDefaultBlockLabel({
-        inputMode: 'sequence-features',
+        inputMode: "sequence-features",
         sequenceLabels: app.model.data.sequenceLabels,
         umap_neighbors: app.model.data.umap_neighbors,
         umap_min_dist: app.model.data.umap_min_dist,
@@ -69,7 +70,10 @@ function labelsForRefs(refs: SUniversalPColumnId[]): string[] {
   const options = filteredSequenceOptions.value;
   if (!options || options.length === 0) return [];
   const lookup = new Map(options.map((o) => [o.value, o.label]));
-  return refs.map((r) => lookup.get(r) ?? '').filter(Boolean).sort();
+  return refs
+    .map((r) => lookup.get(r) ?? "")
+    .filter(Boolean)
+    .sort();
 }
 
 const inputAnchorModel = computed({
@@ -84,9 +88,9 @@ const inputAnchorModel = computed({
     // Embedding refs are anchor-bound and not portable across datasets: reset to sequence mode and
     // clear the embedding selection on any dataset change. The embedding
     // auto-select watcher below then reseeds embeddingRef from the new dataset's options.
-    app.model.data.inputMode = 'sequence-features';
+    app.model.data.inputMode = "sequence-features";
     app.model.data.embeddingRef = undefined;
-    app.model.data.selectedEmbeddingLabel = '';
+    app.model.data.selectedEmbeddingLabel = "";
   },
 });
 
@@ -104,8 +108,8 @@ function setSequencesRef(refs: SUniversalPColumnId[]) {
 
 // --- Embedding input mode ---
 const inputModeOptions = [
-  { label: 'Sequences', value: 'sequence-features' },
-  { label: 'Embeddings', value: 'embedding' },
+  { label: "Sequences", value: "sequence-features" },
+  { label: "Embeddings", value: "embedding" },
 ] as const;
 
 // Embedding mode is reachable only when an embedding column is discoverable on the dataset.
@@ -113,19 +117,21 @@ const embeddingAvailable = computed(() => (app.model.outputs.embeddingOptions?.l
 // Effective mode: render sequence controls if embeddings aren't available, even if the stored mode
 // is 'embedding' (e.g. embeddings vanished without a dataset change), so the UI and args agree.
 const effectiveMode = computed(() =>
-  (app.model.data.inputMode === 'embedding' && embeddingAvailable.value) ? 'embedding' : 'sequence-features',
+  app.model.data.inputMode === "embedding" && embeddingAvailable.value
+    ? "embedding"
+    : "sequence-features",
 );
 
 type EmbeddingOption = NonNullable<typeof app.model.outputs.embeddingOptions>[number];
 
 // Feature priority for the most-complete auto-select: the `pl7.app/feature` DOMAIN values the
 // producer emits
-const FEATURE_PRIORITY = ['Fv', 'scFv', 'VDJRegion', 'CDR3', 'peptide'];
+const FEATURE_PRIORITY = ["Fv", "scFv", "VDJRegion", "CDR3", "peptide"];
 
 function pickMostCompleteEmbedding(options: EmbeddingOption[]): EmbeddingOption | undefined {
   if (options.length === 0) return undefined;
   const rank = (f?: string) => {
-    const i = FEATURE_PRIORITY.indexOf(f ?? '');
+    const i = FEATURE_PRIORITY.indexOf(f ?? "");
     return i === -1 ? FEATURE_PRIORITY.length : i;
   };
   return [...options].sort((a, b) => {
@@ -134,21 +140,21 @@ function pickMostCompleteEmbedding(options: EmbeddingOption[]): EmbeddingOption 
     if (ra !== rb) return ra - rb;
     // Per-chain tie (single-cell paired inputs expose two columns at one feature): prefer chain A
     // (heavy / α / γ). Bulk inputs are single-chain (chain on the input axis), so no tie arises.
-    const ca = a.chain === 'A' ? 0 : 1;
-    const cb = b.chain === 'A' ? 0 : 1;
+    const ca = a.chain === "A" ? 0 : 1;
+    const cb = b.chain === "A" ? 0 : 1;
     if (ca !== cb) return ca - cb;
     // Deterministic fallback (stable across multi-client instances).
-    return (a.label ?? '').localeCompare(b.label ?? '');
+    return (a.label ?? "").localeCompare(b.label ?? "");
   })[0];
 }
 
 function labelForEmbeddingRef(ref: PlRef): string {
   const opts = app.model.outputs.embeddingOptions;
-  return opts?.find((o) => o.ref.blockId === ref.blockId && o.ref.name === ref.name)?.label ?? '';
+  return opts?.find((o) => o.ref.blockId === ref.blockId && o.ref.name === ref.name)?.label ?? "";
 }
 
 // Mode toggle gesture (V3 gesture-driven write, NOT a watcher).
-function onModeChange(mode: 'sequence-features' | 'embedding') {
+function onModeChange(mode: "sequence-features" | "embedding") {
   app.model.data.inputMode = mode;
 }
 
@@ -156,17 +162,17 @@ function onModeChange(mode: 'sequence-features' | 'embedding') {
 // gesture-driven write
 function onEmbeddingRefChange(ref?: PlRef) {
   app.model.data.embeddingRef = ref;
-  app.model.data.selectedEmbeddingLabel = ref ? labelForEmbeddingRef(ref) : '';
+  app.model.data.selectedEmbeddingLabel = ref ? labelForEmbeddingRef(ref) : "";
 }
 
 // Safeguard: if the embedding column's producer becomes undiscoverable while embedding mode is stored
 // (e.g. the upstream Sequence Embeddings block is removed without a dataset change), fall back to
 // sequence mode
 watch(embeddingAvailable, (available) => {
-  if (!available && app.model.data.inputMode === 'embedding') {
-    app.model.data.inputMode = 'sequence-features';
+  if (!available && app.model.data.inputMode === "embedding") {
+    app.model.data.inputMode = "sequence-features";
     app.model.data.embeddingRef = undefined;
-    app.model.data.selectedEmbeddingLabel = '';
+    app.model.data.selectedEmbeddingLabel = "";
   }
 });
 
@@ -178,8 +184,9 @@ watch(
   (options) => {
     if (!options || options.length === 0) return;
     const current = app.model.data.embeddingRef;
-    const stillValid = !!current
-      && options.some((o) => o.ref.blockId === current.blockId && o.ref.name === current.name);
+    const stillValid =
+      !!current &&
+      options.some((o) => o.ref.blockId === current.blockId && o.ref.name === current.name);
     if (stillValid) {
       // Keep the selection; reseed the label snapshot if it drifted (e.g. a legacy load had none).
       const label = labelForEmbeddingRef(current);
@@ -191,13 +198,13 @@ watch(
     const best = pickMostCompleteEmbedding(options);
     if (best) {
       app.model.data.embeddingRef = best.ref;
-      app.model.data.selectedEmbeddingLabel = best.label ?? '';
+      app.model.data.selectedEmbeddingLabel = best.label ?? "";
     }
   },
   { immediate: true },
 );
 
-const defaultOptions = computed((): PredefinedGraphOption<'scatterplot-umap'>[] | null => {
+const defaultOptions = computed((): PredefinedGraphOption<"scatterplot-umap">[] | null => {
   const umapPcols = app.model.outputs.umapPcols;
   if (!umapPcols) return null;
 
@@ -206,24 +213,27 @@ const defaultOptions = computed((): PredefinedGraphOption<'scatterplot-umap'>[] 
   }
 
   // @TODO: drop the legacy fallback once 3.0.0 has propagated.
-  let umap1 = getIndex('pl7.app/umap1', umapPcols);
-  let umap2 = getIndex('pl7.app/umap2', umapPcols);
+  let umap1 = getIndex("pl7.app/umap1", umapPcols);
+  let umap2 = getIndex("pl7.app/umap2", umapPcols);
   if (umap1 === -1) {
-    umap1 = getIndex('pl7.app/vdj/umap1', umapPcols);
-    umap2 = getIndex('pl7.app/vdj/umap2', umapPcols);
+    umap1 = getIndex("pl7.app/vdj/umap1", umapPcols);
+    umap2 = getIndex("pl7.app/vdj/umap2", umapPcols);
   }
 
   if (umap1 === -1 || umap2 === -1) return null;
   return [
-    { inputName: 'x', selectedSource: umapPcols[umap1].spec },
-    { inputName: 'y', selectedSource: umapPcols[umap2].spec },
+    { inputName: "x", selectedSource: umapPcols[umap1].spec },
+    { inputName: "y", selectedSource: umapPcols[umap2].spec },
   ];
 });
 
 // Check if the UMAP file is empty
 const isEmpty = asyncComputed(async () => {
   if (app.model.outputs.umapDim1Table === undefined) return undefined;
-  return (await getRawPlatformaInstance().pFrameDriver.getShape(app.model.outputs.umapDim1Table)).rows === 0;
+  return (
+    (await getRawPlatformaInstance().pFrameDriver.getShape(app.model.outputs.umapDim1Table))
+      .rows === 0
+  );
 });
 
 const selection = ref<PlSelectionModel>({
@@ -254,7 +264,12 @@ watch(
 // stable order), so both instances would write the same value — racing
 // writes are idempotent.
 watch(
-  () => [app.model.data.inputAnchor, app.model.outputs.sequenceOptions, filteredSequenceOptions.value] as const,
+  () =>
+    [
+      app.model.data.inputAnchor,
+      app.model.outputs.sequenceOptions,
+      filteredSequenceOptions.value,
+    ] as const,
   ([anchor, allOptions, filteredOptions]) => {
     if (!anchor || !allOptions || !filteredOptions || filteredOptions.length === 0) return;
 
@@ -303,10 +318,7 @@ watch(
       :status-text="{ noPframe: { title: strings.callToActions.configureSettingsAndRun } }"
     >
       <template #titleLineSlot>
-        <PlBtnGhost
-          icon="dna"
-          @click.stop="() => (multipleSequenceAlignmentOpen = true)"
-        >
+        <PlBtnGhost icon="dna" @click.stop="() => (multipleSequenceAlignmentOpen = true)">
           {{ strings.titles.multipleSequenceAlignment }}
         </PlBtnGhost>
         <PlBtnGhost @click.stop="() => (umapLogOpen = true)">
@@ -336,8 +348,8 @@ watch(
         >
           <template #tooltip>
             <div>
-              Choose the features UMAP lays out:<br><br>
-              <strong>Sequences</strong> — Reflects letter-level similarity.<br><br>
+              Choose the features UMAP lays out:<br /><br />
+              <strong>Sequences</strong> — Reflects letter-level similarity.<br /><br />
               <strong>Embeddings</strong> — Reflects learned biochemical and structural similarity.
             </div>
           </template>
@@ -384,18 +396,25 @@ watch(
               :max="500"
               :step="5"
               required
-              :validate="(value) => value === undefined ? 'Neighbors is required' : (value < 2 ? 'UMAP requires at least 2 neighbors' : undefined)"
+              :validate="
+                (value) =>
+                  value === undefined
+                    ? 'Neighbors is required'
+                    : value < 2
+                      ? 'UMAP requires at least 2 neighbors'
+                      : undefined
+              "
               :style="{ flex: 1 }"
             >
               <template #tooltip>
                 <div>
-                  <strong>Number of Neighbors for UMAP</strong><br>
-                  Controls the balance between local and global structure in UMAP visualization.<br><br>
-                  <strong>Default:</strong> 15 neighbors<br><br>
-                  <strong>Recommended ranges:</strong><br>
-                  • 10-30: Optimal for most datasets<br>
-                  • 5-10: Emphasizes local structure (more clusters)<br>
-                  • 30+: Emphasizes global structure (fewer clusters)<br><br>
+                  <strong>Number of Neighbors for UMAP</strong><br />
+                  Controls the balance between local and global structure in UMAP visualization.<br /><br />
+                  <strong>Default:</strong> 15 neighbors<br /><br />
+                  <strong>Recommended ranges:</strong><br />
+                  • 10-30: Optimal for most datasets<br />
+                  • 5-10: Emphasizes local structure (more clusters)<br />
+                  • 30+: Emphasizes global structure (fewer clusters)<br /><br />
                 </div>
               </template>
             </PlNumberField>
@@ -407,18 +426,21 @@ watch(
               :max="1"
               :step="0.1"
               required
-              :validate="(value) => value === undefined ? 'Minimum Distance is required' : undefined"
+              :validate="
+                (value) => (value === undefined ? 'Minimum Distance is required' : undefined)
+              "
               :style="{ flex: 1 }"
             >
               <template #tooltip>
                 <div>
-                  <strong>Minimum Distance for UMAP</strong><br>
-                  Controls how tightly UMAP packs points together. Lower values create denser clusters, while higher values preserve broader structure.<br><br>
-                  <strong>Default:</strong> 0.5<br><br>
-                  <strong>Recommended ranges:</strong><br>
-                  • 0.0 - 0.2: For creating tight clusters.<br>
-                  • 0.2 - 0.5: A good balance for most datasets.<br>
-                  • 0.5 - 1.0: For a more global view of the data.<br><br>
+                  <strong>Minimum Distance for UMAP</strong><br />
+                  Controls how tightly UMAP packs points together. Lower values create denser
+                  clusters, while higher values preserve broader structure.<br /><br />
+                  <strong>Default:</strong> 0.5<br /><br />
+                  <strong>Recommended ranges:</strong><br />
+                  • 0.0 - 0.2: For creating tight clusters.<br />
+                  • 0.2 - 0.5: A good balance for most datasets.<br />
+                  • 0.5 - 1.0: For a more global view of the data.<br /><br />
                 </div>
               </template>
             </PlNumberField>
@@ -435,23 +457,26 @@ watch(
               :max="1024"
               :step="1"
               required
-              :validate="(value) => value === undefined ? 'Memory is required' : undefined"
+              :validate="(value) => (value === undefined ? 'Memory is required' : undefined)"
               :style="{ flex: 1 }"
             >
               <template #tooltip>
                 <div>
-                  <strong>Memory Allocation for UMAP Calculation</strong><br>
-                  Set the amount of memory (in GB) for the UMAP calculation. The right amount depends on the number of sequences in your dataset.<br><br>
-                  <strong>Default:</strong> 64 GB<br><br>
-                  <strong>Recommended Memory:</strong><br>
-                  <strong>Small</strong> (&lt; 10k sequences): <strong>4-8 GB</strong><br>
-                  <strong>Medium</strong> (10k - 100k sequences): <strong>8-32 GB</strong><br>
-                  <strong>Large</strong> (&gt; 100k sequences): <strong>32+ GB</strong><br><br>
+                  <strong>Memory Allocation for UMAP Calculation</strong><br />
+                  Set the amount of memory (in GB) for the UMAP calculation. The right amount
+                  depends on the number of sequences in your dataset.<br /><br />
+                  <strong>Default:</strong> 64 GB<br /><br />
+                  <strong>Recommended Memory:</strong><br />
+                  <strong>Small</strong> (&lt; 10k sequences): <strong>4-8 GB</strong><br />
+                  <strong>Medium</strong> (10k - 100k sequences): <strong>8-32 GB</strong><br />
+                  <strong>Large</strong> (&gt; 100k sequences): <strong>32+ GB</strong><br /><br />
 
-                  <hr>
-                  ⚠️ Insufficient memory can cause the process to fail. If you run into errors, try increasing the allocated memory. <br>
+                  <hr />
+                  ⚠️ Insufficient memory can cause the process to fail. If you run into errors, try
+                  increasing the allocated memory. <br />
 
-                  <strong>Note:</strong> Larger values for the <code>neighbors</code> parameter can also increase memory usage.
+                  <strong>Note:</strong> Larger values for the <code>neighbors</code> parameter can
+                  also increase memory usage.
                 </div>
               </template>
             </PlNumberField>
@@ -464,27 +489,50 @@ watch(
               :max="128"
               :step="1"
               required
-              :validate="(value) => value === undefined ? 'CPU is required' : undefined"
+              :validate="(value) => (value === undefined ? 'CPU is required' : undefined)"
               :style="{ flex: 1 }"
             >
               <template #tooltip>
                 <div>
-                  <strong>CPU Cores for UMAP Calculation</strong><br>
-                  Number of CPU cores to allocate for the UMAP calculation. More cores can speed up computation, especially for larger datasets.<br><br>
-                  <strong>Default:</strong> 8 cores<br><br>
-                  <strong>Recommended:</strong><br>
-                  • Small datasets: 2-4 cores<br>
-                  • Medium datasets: 4-8 cores<br>
-                  • Large datasets: 8+ cores<br>
+                  <strong>CPU Cores for UMAP Calculation</strong><br />
+                  Number of CPU cores to allocate for the UMAP calculation. More cores can speed up
+                  computation, especially for larger datasets.<br /><br />
+                  <strong>Default:</strong> 8 cores<br /><br />
+                  <strong>Recommended:</strong><br />
+                  • Small datasets: 2-4 cores<br />
+                  • Medium datasets: 4-8 cores<br />
+                  • Large datasets: 8+ cores<br />
                 </div>
               </template>
             </PlNumberField>
           </div>
+          <PlCheckbox v-model="app.model.data.requireGpu"> Require run on GPU </PlCheckbox>
+          <PlNumberField
+            v-model="app.model.data.gpuMemory"
+            label="GPU memory (GB)"
+            placeholder="16"
+            :min="1"
+            :max="64"
+            :step="1"
+            :disabled="!app.model.data.requireGpu"
+            :style="{ flex: 1 }"
+          >
+            <template #tooltip>
+              <div>
+                <strong>GPU Memory Request (GB)</strong><br />
+                Requests a GPU node with at least this much VRAM. Leave empty for the default
+                <strong>16 GiB</strong> (T4-class). The UMAP software uses RAPIDS cuML on GPU when
+                available and falls back to scikit-learn on CPU.<br /><br />
+                On backends without GPU support the request is dropped automatically — the block
+                runs on CPU regardless of this value.
+              </div>
+            </template>
+          </PlNumberField>
         </PlAccordionSection>
         <PlAlert v-if="isEmpty === true" type="warn" :style="{ width: '320px' }">
           <template #title>Empty dataset selection</template>
-          The input dataset you have selected is empty or has too few sequences.
-          Please choose a different dataset.
+          The input dataset you have selected is empty or has too few sequences. Please choose a
+          different dataset.
         </PlAlert>
       </template>
     </GraphMaker>
@@ -503,7 +551,7 @@ watch(
     </PlSlideModal>
     <PlSlideModal v-model="umapLogOpen" width="80%">
       <template #title>UMAP Log</template>
-      <PlLogView :log-handle="app.model.outputs.umapOutput"/>
+      <PlLogView :log-handle="app.model.outputs.umapOutput" />
     </PlSlideModal>
   </PlBlockPage>
 </template>

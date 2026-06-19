@@ -1,14 +1,21 @@
 {
   "name": "@platforma-open/milaboratories.clonotype-space.umap",
   "version": "2.15.0",
-  "type": "module",
   "description": "Block Software",
+  "files": [
+    "./dist/**/*"
+  ],
+  "type": "module",
   "scripts": {
     "do-pack": "shx rm -f *.tgz && pl-pkg build && pnpm pack && shx mv platforma-open*.tgz package.tgz",
     "changeset": "changeset",
     "version-packages": "changeset version",
-    "build": "env PL_DOCKER_REGISTRY_PUSH_TO='quay.io/milaboratories/pl-containers' pl-pkg build",
+    "build": "pl-pkg build",
     "prepublishOnly": "pl-pkg prepublish"
+  },
+  "devDependencies": {
+    "@platforma-open/milaboratories.runenv-python-3": "catalog:",
+    "@platforma-sdk/package-builder": "catalog:"
   },
   "block-software": {
     "entrypoints": {
@@ -31,9 +38,5 @@
         }
       }
     }
-  },
-  "devDependencies": {
-    "@platforma-open/milaboratories.runenv-python-3": "catalog:",
-    "@platforma-sdk/package-builder": "catalog:"
   }
 }
