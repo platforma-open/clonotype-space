@@ -1,3 +1,4 @@
+import strings from '@milaboratories/strings';
 import type {
   DataInfo,
   InferOutputsType,
@@ -11,8 +12,8 @@ import type {
 import {
   BlockModelV3,
   createPFrameForGraphs,
+  isPColumnSpec,
 } from '@platforma-sdk/model';
-import strings from '@milaboratories/strings';
 import { blockDataModel } from './dataModel';
 import { getDefaultBlockLabel } from './label';
 import type { BlockArgs, BlockData } from './types';
@@ -44,7 +45,16 @@ const inputAnchorSpecs = [
 ];
 
 function computeDefaultLabel(data: BlockData): string {
+  if (data.inputMode === 'embedding') {
+    return getDefaultBlockLabel({
+      inputMode: 'embedding',
+      embeddingLabel: data.selectedEmbeddingLabel ?? '',
+      umap_neighbors: data.umap_neighbors,
+      umap_min_dist: data.umap_min_dist,
+    });
+  }
   return getDefaultBlockLabel({
+    inputMode: 'sequence-features',
     sequenceLabels: data.sequenceLabels,
     umap_neighbors: data.umap_neighbors,
     umap_min_dist: data.umap_min_dist,
@@ -72,23 +82,33 @@ export const platforma = BlockModelV3.create(blockDataModel)
 
   .args<BlockArgs>((data) => {
     if (data.inputAnchor === undefined) throw new Error('Input dataset is required');
-    if (data.sequencesRef.length === 0) throw new Error('At least one sequence column is required');
     if (data.umap_neighbors === undefined) throw new Error('UMAP neighbors is required');
     if (data.umap_min_dist === undefined) throw new Error('UMAP min distance is required');
     if (data.cpu === undefined) throw new Error('CPU is required');
     if (data.mem === undefined) throw new Error('Memory is required');
 
-    return {
+    // Shared by both modes. The lambda branches on inputMode and returns ONLY the active mode's
+    // fields, so a stale off-mode value can't affect the run.
+    const shared = {
       defaultBlockLabel: computeDefaultLabel(data),
       customBlockLabel: data.customBlockLabel,
       inputAnchor: data.inputAnchor,
-      sequencesRef: data.sequencesRef,
-      sequenceType: data.sequenceType,
+      inputMode: data.inputMode,
       umap_neighbors: data.umap_neighbors,
       umap_min_dist: data.umap_min_dist,
       cpu: data.cpu,
       mem: data.mem,
     };
+
+    if (data.inputMode === 'embedding') {
+      if (!data.embeddingRef)
+        throw new Error('Connect a Sequence Embeddings output and pick an embedding column to project by embedding');
+      // The embedding model is read from the column spec in the workflow, not snapshotted here (R10).
+      return { ...shared, embeddingRef: data.embeddingRef };
+    }
+
+    if (data.sequencesRef.length === 0) throw new Error('At least one sequence column is required');
+    return { ...shared, sequencesRef: data.sequencesRef, sequenceType: data.sequenceType };
   })
 
   .output('inputOptions', (ctx) =>
@@ -189,6 +209,37 @@ export const platforma = BlockModelV3.create(blockDataModel)
       if (a.isMain && !b.isMain) return -1;
       if (b.isMain && !a.isMain) return 1;
       return 0;
+    });
+  })
+
+  .output('embeddingOptions', (ctx) => {
+    const ref = ctx.data.inputAnchor;
+    if (ref === undefined) return undefined;
+    // PlRef-based options (NOT getCanonicalOptions): the embedding's producer must be wired as an
+    // upstream via wf.resolve(PlRef), so the picker binds a PlRef.
+    const datasetSpec = ctx.resultPool.getPColumnSpecByRef(ref);
+    const cloneAxis = datasetSpec?.axesSpec?.[1];
+    if (cloneAxis === undefined) return undefined;
+    const sameClonotypeAxis = (embAxis?: { name?: string; domain?: Record<string, string> }) => {
+      if (embAxis === undefined || embAxis.name !== cloneAxis.name) return false;
+      const datasetDomain = cloneAxis.domain ?? {};
+      const embDomain = embAxis.domain ?? {};
+      return Object.keys(datasetDomain).every((k) => embDomain[k] === datasetDomain[k]);
+    };
+    const options = ctx.resultPool.getOptions(
+      (spec) => isPColumnSpec(spec)
+        && spec.name === 'pl7.app/embedding'
+        && sameClonotypeAxis(spec.axesSpec?.[0]),
+      { label: { includeNativeLabel: true } },
+    );
+    return options.map((o) => {
+      const spec = ctx.resultPool.getPColumnSpecByRef(o.ref);
+      return {
+        ref: o.ref,
+        label: o.label,
+        feature: spec?.domain?.['pl7.app/feature'],
+        chain: spec?.domain?.['pl7.app/vdj/scClonotypeChain'],
+      };
     });
   })
 

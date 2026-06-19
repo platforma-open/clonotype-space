@@ -1,6 +1,20 @@
 ll := import("@platforma-sdk/workflow-tengo:ll")
 
-getColumns := func(datasetSpec, blockId) {
+// Build the umap1/umap2 output domain. In embedding mode (embeddingModel set) the 
+// embedding-derived projection is distinguishable and traceable in the result
+// pool. In sequence mode (embeddingModel undefined) the domain is column identity,
+// so the k-mer columns must NOT change.
+buildUmapDomain := func(blockId, embeddingModel) {
+  d := {
+    "pl7.app/umap/blockId": blockId
+  }
+  if !is_undefined(embeddingModel) {
+    d["pl7.app/embedding/model"] = embeddingModel
+  }
+  return d
+}
+
+getColumns := func(datasetSpec, blockId, embeddingModel) {
   return {
     axes: [
       {
@@ -16,9 +30,7 @@ getColumns := func(datasetSpec, blockId) {
         spec: {
           name: "pl7.app/umap1",
           valueType: "Double",
-          domain: {
-            "pl7.app/umap/blockId": blockId
-          },
+          domain: buildUmapDomain(blockId, embeddingModel),
           annotations: {
             "pl7.app/label": "UMAP Dim1",
             "pl7.app/format": ".2f",
@@ -33,9 +45,7 @@ getColumns := func(datasetSpec, blockId) {
         spec: {
           name: "pl7.app/umap2",
           valueType: "Double",
-          domain: {
-            "pl7.app/umap/blockId": blockId
-          },
+          domain: buildUmapDomain(blockId, embeddingModel),
           annotations: {
             "pl7.app/label": "UMAP Dim2",
             "pl7.app/format": ".2f",
