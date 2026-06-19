@@ -11,13 +11,13 @@ catalog:
   '@milaboratories/ts-builder': 1.5.2
   '@milaboratories/ts-configs': 1.2.3
   '@platforma-sdk/workflow-tengo': 6.6.3
-  '@platforma-sdk/model': 1.79.6
-  '@platforma-sdk/ui-vue': 1.79.11
+  '@platforma-sdk/model': 1.79.14
+  '@platforma-sdk/ui-vue': 1.79.14
   '@platforma-sdk/tengo-builder': 4.0.8
   '@platforma-sdk/package-builder': 3.13.0
   '@platforma-sdk/block-tools': 2.11.0
   '@platforma-sdk/eslint-config': 1.2.0
-  '@platforma-sdk/test': 1.79.13
+  '@platforma-sdk/test': 1.79.14
   '@milaboratories/helpers': 1.14.2
   '@milaboratories/graph-maker': 1.4.6
   '@milaboratories/multi-sequence-alignment': 1.47.16
