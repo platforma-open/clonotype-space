@@ -69,6 +69,7 @@ export const platforma = BlockModelV3.create(blockDataModel)
   .args<BlockArgs>((data) => {
     if (data.inputAnchor === undefined) throw new Error("Input dataset is required");
     if (data.umap_neighbors === undefined) throw new Error("UMAP neighbors is required");
+    if (data.umap_neighbors < 2) throw new Error("UMAP requires at least 2 neighbors");
     if (data.umap_min_dist === undefined) throw new Error("UMAP min distance is required");
     if (data.umap_min_dist < 0 || data.umap_min_dist > 1)
       throw new Error("UMAP min distance must be between 0 and 1");
