@@ -40,22 +40,50 @@ self.body(func(args) {
         effectiveCpu = 1
     }
 
+    // Resource formulas: RAM and CPU are computed from the tagged "input" file
+    // size at exec time, with the static .mem()/.cpu() values below acting as
+    // the fallback for backends that can't evaluate formulas (pl < v3.0.4).
+    //
+    // RAM multiplier comes from the same empirical peak-RSS observation as the
+    // GPU divide-by-4 above: CPU path ~4×, GPU path ~1×. The floor handles
+    // Python/polars/k-mer overhead the formula cannot see; the ceiling
+    // honours the user's UI-set memory cap.
+    formula := exec.formula
+    memMultiplier := useGpu ? 1 : 4
+    memFloor := useGpu ? 8 : 16
+    memAst := formula.clamp(
+        formula.mul(formula.size("input"), memMultiplier),
+        formula.gib(memFloor),
+        formula.gib(effectiveMem)
+    )
+
     builder := exec.builder().
         software(assets.importSoftware("@platforma-open/milaboratories.clonotype-space.umap:main")).
         mem(string(effectiveMem) + "GiB").
+        memFormula(memAst).
         cpu(effectiveCpu)
 
     if useGpu {
         // 16 GiB fallback when the user leaves the GPU memory field empty
         effectiveGpuMemory := is_undefined(gpuMemory) ? 16 : gpuMemory
         builder = builder.gpuMemory(string(effectiveGpuMemory) + "GiB")
+        // CPU pinned to 1 on GPU — no formula needed, the static .cpu(1) above
+        // is final.
+    } else {
+        // CPU path: scale ~1 core per 2 GiB of input, floored at 4 so k-mer
+        // multiprocess pool stays usable, capped at the user's UI setting.
+        builder = builder.cpuFormula(formula.clamp(
+            formula.divCeil(formula.size("input"), formula.gib(2)),
+            4,
+            effectiveCpu
+        ))
     }
 
     if inputMode == "embedding" {
         // Embedding feature path: main.py reads the exported Parquet matrix instead of counting k-mers
         // (--encoding embedding), then runs centered PCA-95% -> L2-normalize -> Euclidean UMAP.
         builder = builder.
-            addFile("embedding.parquet", args.embeddingMatrix).
+            addFile("embedding.parquet", args.embeddingMatrix, { tag: "input" }).
             arg("--encoding").arg("embedding").
             arg("--matrix").arg("embedding.parquet").
             arg("--key-col").arg(args.keyCol).
@@ -64,7 +92,7 @@ self.body(func(args) {
             arg("-u").arg("umap.tsv").
             arg("--umap-neighbors").arg(string(umap_neighbors)).
             arg("--umap-min-dist").arg(string(umap_min_dist)).
-            arg("--n-jobs").arg(string(effectiveCpu))
+            arg("--n-jobs").argExpr("{system.cpu}")
 
         // Embedding model: logged to the processing log for provenance. Undefined if the column
         // lacks the domain key — omit the flag rather than pass an empty string.
@@ -95,7 +123,7 @@ self.body(func(args) {
         // Note: --seq-col-start "sequence" will match all columns starting with "sequence"
         // (sequence.TRA, sequence.TRB, sequence_0, etc.)
         builder = builder.
-            addFile("sequences.tsv", args.umapTable).
+            addFile("sequences.tsv", args.umapTable, { tag: "input" }).
             arg("-i").arg("sequences.tsv").
             arg("-c").arg("sequence").
             arg("-u").arg("umap.tsv").
@@ -104,7 +132,7 @@ self.body(func(args) {
             arg("--alphabet").arg(alphabet).
             arg("--k-mer-size").arg(string(kmerSize)).
             arg("--encoding").arg(encoding).
-            arg("--n-jobs").arg(string(effectiveCpu))
+            arg("--n-jobs").argExpr("{system.cpu}")
     }
 
     // UMAP software execution
