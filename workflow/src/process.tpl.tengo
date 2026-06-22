@@ -37,6 +37,7 @@ self.body(func(inputs) {
 	cpu := inputs.cpu
 	requireGpu := inputs.requireGpu
 	gpuMemory := inputs.gpuMemory
+	directPerformanceSettings := inputs.directPerformanceSettings
 
 	if is_undefined(umap_neighbors) || is_undefined(umap_min_dist) {
 		ll.panic("umap_neighbors or umap_min_dist is undefined")
@@ -67,7 +68,8 @@ self.body(func(inputs) {
 				mem: mem,
 				cpu: cpu,
 				requireGpu: requireGpu,
-				gpuMemory: gpuMemory
+				gpuMemory: gpuMemory,
+				directPerformanceSettings: directPerformanceSettings
 			}
 		})
 	} else {
@@ -117,7 +119,8 @@ self.body(func(inputs) {
 				mem: mem,
 				cpu: cpu,
 				requireGpu: requireGpu,
-				gpuMemory: gpuMemory
+				gpuMemory: gpuMemory,
+				directPerformanceSettings: directPerformanceSettings
 			}
 		})
 	}

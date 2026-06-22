@@ -104,7 +104,8 @@ wf.body(func(args) {
 			mem: args.mem,
 			cpu: args.cpu,
 			requireGpu: args.requireGpu,
-			gpuMemory: args.gpuMemory
+			gpuMemory: args.gpuMemory,
+			directPerformanceSettings: args.directPerformanceSettings
 		}
 	})
 

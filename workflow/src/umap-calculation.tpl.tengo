@@ -34,20 +34,16 @@ self.body(func(args) {
         software(assets.importSoftware("@platforma-open/milaboratories.clonotype-space.umap:main"))
 
     if directPerformanceSettings {
-        // -------- Direct mode: legacy static RAM / CPU --------
-        effectiveMem := args.mem
-        effectiveCpu := args.cpu
-        if useGpu {
-            effectiveMem = args.mem / 4
-            if effectiveMem < 8 {
-                effectiveMem = 8
-            }
-            effectiveCpu = 1
-        }
-
+        // -------- Direct mode: literal RAM / CPU values from the UI --------
+        // The user explicitly opted out of the formula via the "Set
+        // performance settings directly" checkbox, so do not second-guess
+        // them: pass args.mem and args.cpu through unchanged on both the
+        // CPU and the GPU path. If they want a lean GPU-host allocation
+        // they can type it; if they want symmetric CPU+GPU sizing for
+        // benchmarking they can type that too.
         builder = builder.
-            mem(string(effectiveMem) + "GiB").
-            cpu(effectiveCpu)
+            mem(string(args.mem) + "GiB").
+            cpu(args.cpu)
 
         if useGpu {
             // 16 GiB fallback when the user leaves the GPU memory field empty.
