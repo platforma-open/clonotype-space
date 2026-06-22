@@ -55,77 +55,105 @@ self.body(func(args) {
             builder = builder.gpuMemory(string(effectiveGpuMemory) + "GiB")
         }
     } else {
-        // -------- Formula mode: derive RAM / CPU from f.size("input") --------
-        memMultiplier := 0
-        memFloorGiB := 0
-        memCeilGiB := 0
-        cpuPerByte := 0 // CPU = ceil(size / cpuPerByte) bytes per core
+        // -------- Formula mode: derive RAM / CPU from input clonotype count --------
+        // RAM and CPU are dominated by N (number of clonotypes). On the
+        // sequence-features path we drive the formula off f.lineCount("input")
+        // because the TSV is one row per clonotype — lineCount gives an exact
+        // N. On the embedding path the input is a binary long-format parquet,
+        // where the SDK's lineCount is unsupported (only line-oriented text
+        // formats are accepted), so we fall back to f.size("input"), which
+        // scales linearly with N × D anyway.
+        //
+        // Per-clonotype multipliers come from docs/resource-formula-analysis.md.
+
+        memAst := undefined
+        cpuAst := undefined
+        staticMemGiB := 0
+        staticCpu := 0
+
         if inputMode == "embedding" {
+            fileSize := formula.size("input")
             if useGpu {
-                // Embedding GPU path: parquet → polars read + dedup on host
-                // (dense float32 ≈ N×D×4 B, parquet compresses ~3-8×); PCA/UMAP
-                // on device.
-                memMultiplier = 6
-                memFloorGiB = 4
-                memCeilGiB = 16
+                // Host work: polars read_parquet → dense float32 N×D matrix +
+                // np.unique dedup copy. Heavy compute (cuML PCA, cuML UMAP)
+                // lives in VRAM, so host RAM is dominated by the matrix.
+                // ~6× compressed-parquet size empirically.
+                memAst = formula.clamp(
+                    formula.add(formula.gib(2), formula.mul(fileSize, 6)),
+                    formula.gib(4),
+                    formula.gib(16)
+                )
+                staticMemGiB = 8
+                staticCpu = 1
             } else {
-                // Embedding CPU path: dense matrix + dedup copy + sklearn PCA
-                // (centered, materialises a copy) + sklearn UMAP KNN graph.
-                memMultiplier = 12
-                memFloorGiB = 16
-                memCeilGiB = 128
-                cpuPerByte = 4 * 1024 * 1024 * 1024 // 1 core per 4 GiB
+                // Dense matrix + dedup copy + sklearn PCA (materialises a
+                // centered copy) + sklearn UMAP KNN graph. ~12× file size.
+                memAst = formula.clamp(
+                    formula.add(formula.gib(8), formula.mul(fileSize, 12)),
+                    formula.gib(16),
+                    formula.gib(128)
+                )
+                // CPU: 1 core per ~4 GiB of parquet, floored at 4 (PCA/UMAP
+                // parallelism), capped at 16 (returns diminish past that).
+                cpuAst = formula.clamp(
+                    formula.divCeil(fileSize, formula.gib(4)),
+                    4,
+                    16
+                )
+                staticMemGiB = 64
+                staticCpu = 8
             }
         } else {
-            // sequence-features path
+            // sequence-features path: one TSV row per clonotype → exact N.
+            N := formula.lineCount("input")
             if useGpu {
-                // Sequence GPU path: polars DF + sparse k-mer CSR on host
-                // (~4× TSV bytes); SVD/UMAP on device.
-                memMultiplier = 2
-                memFloorGiB = 4
-                memCeilGiB = 16
+                // Host work: polars DataFrame (~100 B per row) + sparse k-mer
+                // CSR (~400 B per row, transferred to VRAM). Heavy compute
+                // (cuML SVD/UMAP) lives in VRAM. ~1 KiB per clonotype on host.
+                memAst = formula.clamp(
+                    formula.add(formula.gib(2), formula.mul(N, 1024)),
+                    formula.gib(4),
+                    formula.gib(16)
+                )
+                staticMemGiB = 8
+                staticCpu = 1
             } else {
-                // Sequence CPU path: polars DF + sparse k-mer matrix +
-                // TruncatedSVD + sklearn UMAP fit/transform. The 20× factor
-                // reflects polars/scipy working sets observed empirically.
-                memMultiplier = 20
-                memFloorGiB = 16
-                memCeilGiB = 128
-                cpuPerByte = 1 * 1024 * 1024 * 1024 // 1 core per 1 GiB
+                // CPU path: polars DF + sparse k-mer matrix (fit-sample capped
+                // at 200 k) + TruncatedSVD + sklearn UMAP fit on 100 k sample
+                // + chunked transform (50 k/chunk). Peak ≈ 4 KiB per clonotype
+                // on top of an 8 GiB Python/polars/numpy/scipy base.
+                memAst = formula.clamp(
+                    formula.add(formula.gib(8), formula.mul(N, 4096)),
+                    formula.gib(16),
+                    formula.gib(128)
+                )
+                // CPU: 1 core per 250 000 clonotypes — k-mer counting
+                // parallelises perfectly across cores; SVD/UMAP are largely
+                // single-thread. Floored at 4, capped at 16.
+                cpuAst = formula.clamp(
+                    formula.divCeil(N, 250000),
+                    4,
+                    16
+                )
+                staticMemGiB = 64
+                staticCpu = 8
             }
         }
 
-        memAst := formula.clamp(
-            formula.add(formula.gib(memFloorGiB / 2), formula.mul(formula.size("input"), memMultiplier)),
-            formula.gib(memFloorGiB),
-            formula.gib(memCeilGiB)
-        )
-
-        // Static fallback values used by backends without formula support.
-        // Pick the centre of the formula's range so the fallback is in the
-        // same ballpark as a real evaluation.
-        staticMemGiB := useGpu ? memFloorGiB : 64
-        staticCpu := useGpu ? 1 : 8
-
+        // Static fallback for backends that can't evaluate resource formulas
+        // (pl < v3.0.4). Chosen as the centre of the formula's typical range.
         builder = builder.
             mem(string(staticMemGiB) + "GiB").
             cpu(staticCpu).
             memFormula(memAst)
 
         if useGpu {
-            // GPU path needs only one host core (k-mer counting falls back to
-            // single-thread below the 5 k-sequence threshold; embedding mode
-            // loads parquet single-threaded too). No CPU formula required.
+            // GPU path: a single host core is enough — k-mer counting falls
+            // back to single-thread below the 5 k-sequence threshold, and the
+            // embedding path's parquet read is single-thread anyway.
             builder = builder.gpuMemory("16GiB")
         } else {
-            // CPU path: 1 core per `cpuPerByte` of input, floored at 4 for
-            // k-mer multiprocess / sklearn parallelism, capped at 16 — beyond
-            // that returns diminish (most heavy steps are single-thread).
-            builder = builder.cpuFormula(formula.clamp(
-                formula.divCeil(formula.size("input"), cpuPerByte),
-                4,
-                16
-            ))
+            builder = builder.cpuFormula(cpuAst)
         }
     }
 

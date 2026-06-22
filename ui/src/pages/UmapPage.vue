@@ -427,7 +427,12 @@ watch(
               :step="0.1"
               required
               :validate="
-                (value) => (value === undefined ? 'Minimum Distance is required' : undefined)
+                (value) => {
+                  if (value === undefined) return 'Minimum Distance is required';
+                  if (value < 0) return 'Minimum Distance must be non-negative';
+                  if (value > 1) return 'Minimum Distance must less or equal 1.0';
+                  return undefined;
+                }
               "
               :style="{ flex: 1 }"
             >
