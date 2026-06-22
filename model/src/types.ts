@@ -40,6 +40,14 @@ export type BlockData = {
   selectedEmbeddingLabel: string;
   umap_neighbors: number;
   umap_min_dist: number;
+  /**
+   * When false (the default), `cpu` / `mem` / `requireGpu` / `gpuMemory` are
+   * ignored and the workflow sizes RAM and CPU from input file size via
+   * `exec.formula`. When true, those fields are used as static requests
+   * (legacy behaviour). The UI checkbox at the top of Performance Settings
+   * toggles this flag and disables the inputs below when it is false.
+   */
+  directPerformanceSettings: boolean;
   cpu: number;
   mem: number;
   /**
@@ -77,6 +85,7 @@ export type BlockArgs = {
   embeddingRef?: PlRef;
   umap_neighbors: number;
   umap_min_dist: number;
+  directPerformanceSettings: boolean;
   cpu: number;
   mem: number;
   requireGpu: boolean;

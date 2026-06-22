@@ -83,6 +83,7 @@ export const platforma = BlockModelV3.create(blockDataModel)
       inputMode: data.inputMode,
       umap_neighbors: data.umap_neighbors,
       umap_min_dist: data.umap_min_dist,
+      directPerformanceSettings: data.directPerformanceSettings,
       cpu: data.cpu,
       mem: data.mem,
       requireGpu: data.requireGpu,

@@ -11,51 +11,133 @@ self.body(func(args) {
     // Input parameters (shared)
     umap_neighbors := args.umap_neighbors
     umap_min_dist := args.umap_min_dist
-    mem := args.mem
-    cpu := args.cpu
-    requireGpu := args.requireGpu
-    gpuMemory := args.gpuMemory
     inputMode := is_undefined(args.inputMode) ? "sequence-features" : args.inputMode
+    // When false (default), RAM/CPU are derived from input file size via
+    // exec.formula and the manual args below are ignored. When true, the
+    // workflow uses the static args.mem / args.cpu / args.requireGpu /
+    // args.gpuMemory values from the UI exactly as before.
+    directPerformanceSettings := !is_undefined(args.directPerformanceSettings) && args.directPerformanceSettings
 
-    // When the umap exec actually lands on a GPU node, the heavy memory users
-    // (SVD U-matrix, UMAP KNN/iter buffers, dense embedding for the fit) live in
-    // VRAM, not RAM. Empirically the CPU path peaks at ~4× the GPU path's
-    // host-RAM footprint, so divide by 4 — with an 8 GiB floor for the k-mer
-    // multiprocess pool, Python interpreter overhead, and polars/scipy
-    // working sets that the GPU path can't avoid.
+    // GPU intent: in direct mode the user controls requireGpu; in formula
+    // mode we always try GPU and let `exec.hasGpu` drop the request on
+    // backends without GPU support.
+    requireGpu := directPerformanceSettings ? args.requireGpu : true
     useGpu := requireGpu && exec.hasGpu
-    effectiveMem := mem
-    effectiveCpu := cpu
-    if useGpu {
-        effectiveMem = mem / 4
-        if effectiveMem < 8 {
-            effectiveMem = 8
-        }
-        // On a GPU node the heavy compute (SVD/PCA, UMAP) runs on the GPU; the
-        // CPU only orchestrates the run plus the small k-mer counting step.
-        // Dropping the CPU request to 1 keeps the GPU pool densely packed (one
-        // job per node won't reserve cores it can't use) without meaningfully
-        // hurting wall-clock — k-mer counting is bounded by L̄·N and finishes
-        // in seconds even single-threaded for typical clonotype counts.
-        effectiveCpu = 1
-    }
+
+    formula := exec.formula
+
+    // ====================================================================
+    // Resource setup
+    // ====================================================================
 
     builder := exec.builder().
-        software(assets.importSoftware("@platforma-open/milaboratories.clonotype-space.umap:main")).
-        mem(string(effectiveMem) + "GiB").
-        cpu(effectiveCpu)
+        software(assets.importSoftware("@platforma-open/milaboratories.clonotype-space.umap:main"))
 
-    if useGpu {
-        // 16 GiB fallback when the user leaves the GPU memory field empty
-        effectiveGpuMemory := is_undefined(gpuMemory) ? 16 : gpuMemory
-        builder = builder.gpuMemory(string(effectiveGpuMemory) + "GiB")
+    if directPerformanceSettings {
+        // -------- Direct mode: legacy static RAM / CPU --------
+        effectiveMem := args.mem
+        effectiveCpu := args.cpu
+        if useGpu {
+            effectiveMem = args.mem / 4
+            if effectiveMem < 8 {
+                effectiveMem = 8
+            }
+            effectiveCpu = 1
+        }
+
+        builder = builder.
+            mem(string(effectiveMem) + "GiB").
+            cpu(effectiveCpu)
+
+        if useGpu {
+            // 16 GiB fallback when the user leaves the GPU memory field empty.
+            effectiveGpuMemory := is_undefined(args.gpuMemory) ? 16 : args.gpuMemory
+            builder = builder.gpuMemory(string(effectiveGpuMemory) + "GiB")
+        }
+    } else {
+        // -------- Formula mode: derive RAM / CPU from f.size("input") --------
+        memMultiplier := 0
+        memFloorGiB := 0
+        memCeilGiB := 0
+        cpuPerByte := 0 // CPU = ceil(size / cpuPerByte) bytes per core
+        if inputMode == "embedding" {
+            if useGpu {
+                // Embedding GPU path: parquet → polars read + dedup on host
+                // (dense float32 ≈ N×D×4 B, parquet compresses ~3-8×); PCA/UMAP
+                // on device.
+                memMultiplier = 6
+                memFloorGiB = 4
+                memCeilGiB = 16
+            } else {
+                // Embedding CPU path: dense matrix + dedup copy + sklearn PCA
+                // (centered, materialises a copy) + sklearn UMAP KNN graph.
+                memMultiplier = 12
+                memFloorGiB = 16
+                memCeilGiB = 128
+                cpuPerByte = 4 * 1024 * 1024 * 1024 // 1 core per 4 GiB
+            }
+        } else {
+            // sequence-features path
+            if useGpu {
+                // Sequence GPU path: polars DF + sparse k-mer CSR on host
+                // (~4× TSV bytes); SVD/UMAP on device.
+                memMultiplier = 2
+                memFloorGiB = 4
+                memCeilGiB = 16
+            } else {
+                // Sequence CPU path: polars DF + sparse k-mer matrix +
+                // TruncatedSVD + sklearn UMAP fit/transform. The 20× factor
+                // reflects polars/scipy working sets observed empirically.
+                memMultiplier = 20
+                memFloorGiB = 16
+                memCeilGiB = 128
+                cpuPerByte = 1 * 1024 * 1024 * 1024 // 1 core per 1 GiB
+            }
+        }
+
+        memAst := formula.clamp(
+            formula.add(formula.gib(memFloorGiB / 2), formula.mul(formula.size("input"), memMultiplier)),
+            formula.gib(memFloorGiB),
+            formula.gib(memCeilGiB)
+        )
+
+        // Static fallback values used by backends without formula support.
+        // Pick the centre of the formula's range so the fallback is in the
+        // same ballpark as a real evaluation.
+        staticMemGiB := useGpu ? memFloorGiB : 64
+        staticCpu := useGpu ? 1 : 8
+
+        builder = builder.
+            mem(string(staticMemGiB) + "GiB").
+            cpu(staticCpu).
+            memFormula(memAst)
+
+        if useGpu {
+            // GPU path needs only one host core (k-mer counting falls back to
+            // single-thread below the 5 k-sequence threshold; embedding mode
+            // loads parquet single-threaded too). No CPU formula required.
+            builder = builder.gpuMemory("16GiB")
+        } else {
+            // CPU path: 1 core per `cpuPerByte` of input, floored at 4 for
+            // k-mer multiprocess / sklearn parallelism, capped at 16 — beyond
+            // that returns diminish (most heavy steps are single-thread).
+            builder = builder.cpuFormula(formula.clamp(
+                formula.divCeil(formula.size("input"), cpuPerByte),
+                4,
+                16
+            ))
+        }
     }
+
+    // ====================================================================
+    // Pipeline-specific arguments and input file
+    // ====================================================================
 
     if inputMode == "embedding" {
         // Embedding feature path: main.py reads the exported Parquet matrix instead of counting k-mers
         // (--encoding embedding), then runs centered PCA-95% -> L2-normalize -> Euclidean UMAP.
         builder = builder.
-            addFile("embedding.parquet", args.embeddingMatrix).
+            addFile("embedding.parquet", args.embeddingMatrix, { tag: "input" }).
             arg("--encoding").arg("embedding").
             arg("--matrix").arg("embedding.parquet").
             arg("--key-col").arg(args.keyCol).
@@ -64,7 +146,7 @@ self.body(func(args) {
             arg("-u").arg("umap.tsv").
             arg("--umap-neighbors").arg(string(umap_neighbors)).
             arg("--umap-min-dist").arg(string(umap_min_dist)).
-            arg("--n-jobs").arg(string(effectiveCpu))
+            arg("--n-jobs").argExpr("{system.cpu}")
 
         // Embedding model: logged to the processing log for provenance. Undefined if the column
         // lacks the domain key — omit the flag rather than pass an empty string.
@@ -95,7 +177,7 @@ self.body(func(args) {
         // Note: --seq-col-start "sequence" will match all columns starting with "sequence"
         // (sequence.TRA, sequence.TRB, sequence_0, etc.)
         builder = builder.
-            addFile("sequences.tsv", args.umapTable).
+            addFile("sequences.tsv", args.umapTable, { tag: "input" }).
             arg("-i").arg("sequences.tsv").
             arg("-c").arg("sequence").
             arg("-u").arg("umap.tsv").
@@ -104,7 +186,7 @@ self.body(func(args) {
             arg("--alphabet").arg(alphabet).
             arg("--k-mer-size").arg(string(kmerSize)).
             arg("--encoding").arg(encoding).
-            arg("--n-jobs").arg(string(effectiveCpu))
+            arg("--n-jobs").argExpr("{system.cpu}")
     }
 
     // UMAP software execution
