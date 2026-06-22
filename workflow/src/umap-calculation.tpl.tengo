@@ -135,33 +135,13 @@ self.body(func(args) {
                 staticCpu = 8
             }
         }
-
-        // Static fallback for backends that can't evaluate resource formulas
-        // (pl < v3.0.4). Chosen as the centre of the formula's typical range.
-        builder = builder.
-            mem(string(staticMemGiB) + "GiB").
-            cpu(staticCpu).
-            memFormula(memAst)
-
-        if useGpu {
-            // GPU path: a single host core is enough — k-mer counting falls
-            // back to single-thread below the 5 k-sequence threshold, and the
-            // embedding path's parquet read is single-thread anyway.
-            builder = builder.gpuMemory("16GiB")
-        } else {
-            builder = builder.cpuFormula(cpuAst)
-        }
     }
-
-    // ====================================================================
-    // Pipeline-specific arguments and input file
-    // ====================================================================
 
     if inputMode == "embedding" {
         // Embedding feature path: main.py reads the exported Parquet matrix instead of counting k-mers
         // (--encoding embedding), then runs centered PCA-95% -> L2-normalize -> Euclidean UMAP.
         builder = builder.
-            addFile("embedding.parquet", args.embeddingMatrix, { tag: "input" }).
+            addFile("embedding.parquet", args.embeddingMatrix).
             arg("--encoding").arg("embedding").
             arg("--matrix").arg("embedding.parquet").
             arg("--key-col").arg(args.keyCol).
@@ -201,7 +181,7 @@ self.body(func(args) {
         // Note: --seq-col-start "sequence" will match all columns starting with "sequence"
         // (sequence.TRA, sequence.TRB, sequence_0, etc.)
         builder = builder.
-            addFile("sequences.tsv", args.umapTable, { tag: "input" }).
+            addFile("sequences.tsv", args.umapTable).
             arg("-i").arg("sequences.tsv").
             arg("-c").arg("sequence").
             arg("-u").arg("umap.tsv").
