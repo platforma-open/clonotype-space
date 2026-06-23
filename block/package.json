@@ -1,6 +1,6 @@
 {
   "name": "@platforma-open/milaboratories.clonotype-space",
-  "version": "3.4.2",
+  "version": "3.4.3",
   "files": [
     "index.d.ts",
     "index.js"
