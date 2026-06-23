@@ -72,7 +72,7 @@ export const platforma = BlockModelV3.create(blockDataModel)
     if (data.umap_min_dist === undefined) throw new Error("UMAP min distance is required");
     if (data.cpu === undefined) throw new Error("CPU is required");
     if (data.mem === undefined) throw new Error("Memory is required");
-    if (data.requireGpu === undefined) throw new Error("Require GPU is required");
+    data.requireGpu = data.requireGpu ?? true;
 
     // Shared by both modes. The lambda branches on inputMode and returns ONLY the active mode's
     // fields, so a stale off-mode value can't affect the run.
