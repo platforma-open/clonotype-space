@@ -141,7 +141,7 @@ self.body(func(args) {
         // Embedding feature path: main.py reads the exported Parquet matrix instead of counting k-mers
         // (--encoding embedding), then runs centered PCA-95% -> L2-normalize -> Euclidean UMAP.
         builder = builder.
-            addFile("embedding.parquet", args.embeddingMatrix).
+            addFile("embedding.parquet", args.embeddingMatrix, { tag: "input" }).
             arg("--encoding").arg("embedding").
             arg("--matrix").arg("embedding.parquet").
             arg("--key-col").arg(args.keyCol).
@@ -181,7 +181,7 @@ self.body(func(args) {
         // Note: --seq-col-start "sequence" will match all columns starting with "sequence"
         // (sequence.TRA, sequence.TRB, sequence_0, etc.)
         builder = builder.
-            addFile("sequences.tsv", args.umapTable).
+            addFile("sequences.tsv", args.umapTable, { tag: "input" }).
             arg("-i").arg("sequences.tsv").
             arg("-c").arg("sequence").
             arg("-u").arg("umap.tsv").
