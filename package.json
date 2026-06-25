@@ -31,7 +31,10 @@
   },
   "pnpm": {
     "overrides": {
-      "@platforma-sdk/workflow-tengo": "link:../../core/platforma/sdk/workflow-tengo"
+      "@platforma-sdk/workflow-tengo": "file:../../core/platforma/sdk/workflow-tengo/package.tgz",
+      "@platforma-open/milaboratories.software-ptabler": "2.1.2",
+      "@platforma-open/milaboratories.software-ptexter": "1.2.2",
+      "@platforma-open/milaboratories.software-small-binaries": "^2.1.1"
     }
   },
   "packageManager": "pnpm@9.12.0"
