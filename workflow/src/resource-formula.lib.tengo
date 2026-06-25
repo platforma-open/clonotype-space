@@ -1,0 +1,127 @@
+// Resource formulas for the UMAP exec, extracted as a pure function so the
+// sizing logic can be unit-tested without a backend (see resource-formula.test.tengo).
+//
+// In "formula mode" (the default — the user has NOT ticked "set performance
+// settings directly"), RAM/CPU/GPU are derived from the input data at run time
+// via exec.formula instead of fixed values. buildResources() returns the plan;
+// umap-calculation.tpl.tengo applies it to the exec builder.
+//
+// Per-clonotype / per-byte multipliers are sized from the UMAP software's memory
+// profile (polars + sparse k-mer matrix + SVD/UMAP on the CPU path; cuML on the
+// GPU path, where heavy compute lives in VRAM and host RAM stays small).
+
+exec := import("@platforma-sdk/workflow-tengo:exec")
+f := exec.formula
+
+// buildResources(inputMode, useGpu) -> resource plan for the UMAP exec.
+//
+// inputMode: "embedding" (binary long-format parquet — sized off f.size, since
+//   the SDK's lineCount supports only line-oriented text) or anything else, the
+//   "sequence-features" path (one TSV row per clonotype — sized off f.lineCount,
+//   an exact clonotype count N).
+// useGpu: whether a GPU is available and requested. On the GPU path host RAM/CPU
+//   are small (compute runs in VRAM) and a VRAM formula is produced; on the CPU
+//   path RAM and CPU both scale with the data and gpuAst stays undefined.
+//
+// Returns { memAst, cpuAst, gpuAst, staticMemGiB, staticCpu, staticGpuMem }:
+//   memAst       — RAM formula AST (always set)
+//   cpuAst       — CPU formula AST (set only on CPU paths; undefined on GPU paths,
+//                  where staticCpu is used directly)
+//   gpuAst       — GPU VRAM formula AST (set only when useGpu)
+//   staticMemGiB — RAM fallback (GiB) for backends that can't evaluate formulas
+//   staticCpu    — CPU cores: fallback on CPU paths, the literal request on GPU paths
+//   staticGpuMem — GPU VRAM fallback string (used only when useGpu)
+buildResources := func(inputMode, useGpu) {
+	res := {
+		memAst: undefined,
+		cpuAst: undefined,
+		gpuAst: undefined,
+		staticMemGiB: 0,
+		staticCpu: 0,
+		staticGpuMem: "16GiB"
+	}
+
+	if inputMode == "embedding" {
+		fileSize := f.size("input")
+		if useGpu {
+			// Host work: polars read_parquet -> dense float32 N×D matrix +
+			// np.unique dedup copy. Heavy compute (cuML PCA, cuML UMAP) lives in
+			// VRAM, so host RAM is dominated by the matrix. ~6× compressed-parquet
+			// size empirically.
+			res.memAst = f.clamp(
+				f.add(f.gib(2), f.mul(fileSize, 6)),
+				f.gib(4),
+				f.gib(16))
+			// VRAM holds the dense N×D float32 matrix plus cuML PCA + UMAP working
+			// sets (KNN graph, transformed embedding). Scales with the dense data,
+			// ~8× compressed-parquet size. Floor 8 GiB so small inputs still land on
+			// a real GPU; cap 48 GiB (largest device tier).
+			res.gpuAst = f.clamp(
+				f.add(f.gib(2), f.mul(fileSize, 8)),
+				f.gib(8),
+				f.gib(48))
+			res.staticMemGiB = 8
+			res.staticCpu = 1
+		} else {
+			// Dense matrix + dedup copy + sklearn PCA (materialises a centered
+			// copy) + sklearn UMAP KNN graph. ~12× file size.
+			res.memAst = f.clamp(
+				f.add(f.gib(8), f.mul(fileSize, 12)),
+				f.gib(16),
+				f.gib(128))
+			// CPU: 1 core per ~4 GiB of parquet, floored at 4 (PCA/UMAP
+			// parallelism), capped at 16 (returns diminish past that).
+			res.cpuAst = f.clamp(
+				f.divCeil(fileSize, f.gib(4)),
+				4,
+				16)
+			res.staticMemGiB = 64
+			res.staticCpu = 8
+		}
+	} else {
+		// sequence-features path: one TSV row per clonotype -> exact N.
+		N := f.lineCount("input")
+		if useGpu {
+			// Host work: polars DataFrame (~100 B per row) + sparse k-mer CSR
+			// (~400 B per row, transferred to VRAM). Heavy compute (cuML SVD/UMAP)
+			// lives in VRAM. ~1 KiB per clonotype on host.
+			res.memAst = f.clamp(
+				f.add(f.gib(2), f.mul(N, 1024)),
+				f.gib(4),
+				f.gib(16))
+			// VRAM holds the sparse k-mer CSR (~400 B per clonotype, copied to the
+			// device) plus cuML TruncatedSVD + UMAP working sets. Budget ~512 B per
+			// clonotype on the device. Floor 8 GiB, cap 48 GiB.
+			res.gpuAst = f.clamp(
+				f.add(f.gib(2), f.mul(N, 512)),
+				f.gib(8),
+				f.gib(48))
+			res.staticMemGiB = 8
+			res.staticCpu = 1
+		} else {
+			// CPU path: polars DF + sparse k-mer matrix (fit-sample capped at
+			// 200 k) + TruncatedSVD + sklearn UMAP fit on 100 k sample + chunked
+			// transform (50 k/chunk). Peak ~4 KiB per clonotype on top of an 8 GiB
+			// Python/polars/numpy/scipy base.
+			res.memAst = f.clamp(
+				f.add(f.gib(8), f.mul(N, 4096)),
+				f.gib(16),
+				f.gib(128))
+			// CPU: 1 core per 250 000 clonotypes — k-mer counting parallelises
+			// perfectly across cores; SVD/UMAP are largely single-thread. Floored
+			// at 4, capped at 16.
+			res.cpuAst = f.clamp(
+				f.divCeil(N, 250000),
+				4,
+				16)
+			res.staticMemGiB = 64
+			res.staticCpu = 8
+		}
+	}
+
+	return res
+}
+
+export {
+	buildResources: buildResources
+}

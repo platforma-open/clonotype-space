@@ -3,6 +3,7 @@
 self := import("@platforma-sdk/workflow-tengo:tpl")
 exec := import("@platforma-sdk/workflow-tengo:exec")
 assets := import("@platforma-sdk/workflow-tengo:assets")
+resourceFormula := import(":resource-formula")
 json := import("json")
 
 self.defineOutputs("umapTsVFile", "umapOutput")
@@ -23,8 +24,6 @@ self.body(func(args) {
     // backends without GPU support.
     requireGpu := directPerformanceSettings ? args.requireGpu : true
     useGpu := requireGpu && exec.hasGpu
-
-    formula := exec.formula
 
     // ====================================================================
     // Resource setup
@@ -51,89 +50,28 @@ self.body(func(args) {
             builder = builder.gpuMemory(string(effectiveGpuMemory) + "GiB")
         }
     } else {
-        // -------- Formula mode: derive RAM / CPU from input clonotype count --------
-        // RAM and CPU are dominated by N (number of clonotypes). On the
-        // sequence-features path we drive the formula off f.lineCount("input")
-        // because the TSV is one row per clonotype — lineCount gives an exact
-        // N. On the embedding path the input is a binary long-format parquet,
-        // where the SDK's lineCount is unsupported (only line-oriented text
-        // formats are accepted), so we fall back to f.size("input"), which
-        // scales linearly with N × D anyway.
+        // -------- Formula mode: derive RAM / CPU / GPU from input size --------
+        // The sizing logic lives in :resource-formula (a pure function) so it can
+        // be unit-tested without a backend (see resource-formula.test.tengo). It
+        // returns RAM/CPU/GPU formula ASTs plus static fallbacks; we apply them to
+        // the builder here.
         //
-        // Per-clonotype multipliers come from docs/resource-formula-analysis.md.
+        // RAM is always a formula; CPU is a formula only on the CPU paths (the GPU
+        // paths use a small fixed host CPU). Each formula carries a static fallback
+        // so the request still resolves on backends that can't evaluate formulas at
+        // run time (no getBlobSize). On a GPU-capable backend we add a GPU VRAM
+        // formula too — useGpu already folds in `exec.hasGpu`, so this stays off on
+        // GPU-less backends.
+        plan := resourceFormula.buildResources(inputMode, useGpu)
 
-        memAst := undefined
-        cpuAst := undefined
-        staticMemGiB := 0
-        staticCpu := 0
-
-        if inputMode == "embedding" {
-            fileSize := formula.size("input")
-            if useGpu {
-                // Host work: polars read_parquet → dense float32 N×D matrix +
-                // np.unique dedup copy. Heavy compute (cuML PCA, cuML UMAP)
-                // lives in VRAM, so host RAM is dominated by the matrix.
-                // ~6× compressed-parquet size empirically.
-                memAst = formula.clamp(
-                    formula.add(formula.gib(2), formula.mul(fileSize, 6)),
-                    formula.gib(4),
-                    formula.gib(16)
-                )
-                staticMemGiB = 8
-                staticCpu = 1
-            } else {
-                // Dense matrix + dedup copy + sklearn PCA (materialises a
-                // centered copy) + sklearn UMAP KNN graph. ~12× file size.
-                memAst = formula.clamp(
-                    formula.add(formula.gib(8), formula.mul(fileSize, 12)),
-                    formula.gib(16),
-                    formula.gib(128)
-                )
-                // CPU: 1 core per ~4 GiB of parquet, floored at 4 (PCA/UMAP
-                // parallelism), capped at 16 (returns diminish past that).
-                cpuAst = formula.clamp(
-                    formula.divCeil(fileSize, formula.gib(4)),
-                    4,
-                    16
-                )
-                staticMemGiB = 64
-                staticCpu = 8
-            }
+        builder = builder.memFormula(plan.memAst, { fallback: string(plan.staticMemGiB) + "GiB" })
+        if !is_undefined(plan.cpuAst) {
+            builder = builder.cpuFormula(plan.cpuAst, { fallback: plan.staticCpu })
         } else {
-            // sequence-features path: one TSV row per clonotype → exact N.
-            N := formula.lineCount("input")
-            if useGpu {
-                // Host work: polars DataFrame (~100 B per row) + sparse k-mer
-                // CSR (~400 B per row, transferred to VRAM). Heavy compute
-                // (cuML SVD/UMAP) lives in VRAM. ~1 KiB per clonotype on host.
-                memAst = formula.clamp(
-                    formula.add(formula.gib(2), formula.mul(N, 1024)),
-                    formula.gib(4),
-                    formula.gib(16)
-                )
-                staticMemGiB = 8
-                staticCpu = 1
-            } else {
-                // CPU path: polars DF + sparse k-mer matrix (fit-sample capped
-                // at 200 k) + TruncatedSVD + sklearn UMAP fit on 100 k sample
-                // + chunked transform (50 k/chunk). Peak ≈ 4 KiB per clonotype
-                // on top of an 8 GiB Python/polars/numpy/scipy base.
-                memAst = formula.clamp(
-                    formula.add(formula.gib(8), formula.mul(N, 4096)),
-                    formula.gib(16),
-                    formula.gib(128)
-                )
-                // CPU: 1 core per 250 000 clonotypes — k-mer counting
-                // parallelises perfectly across cores; SVD/UMAP are largely
-                // single-thread. Floored at 4, capped at 16.
-                cpuAst = formula.clamp(
-                    formula.divCeil(N, 250000),
-                    4,
-                    16
-                )
-                staticMemGiB = 64
-                staticCpu = 8
-            }
+            builder = builder.cpu(plan.staticCpu)
+        }
+        if useGpu {
+            builder = builder.gpuFormula(plan.gpuAst, { fallback: plan.staticGpuMem })
         }
     }
 

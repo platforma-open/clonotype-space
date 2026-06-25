@@ -29,5 +29,10 @@
     "oxfmt": "*",
     "oxlint": "*"
   },
+  "pnpm": {
+    "overrides": {
+      "@platforma-sdk/workflow-tengo": "link:../../core/platforma/sdk/workflow-tengo"
+    }
+  },
   "packageManager": "pnpm@9.12.0"
 }

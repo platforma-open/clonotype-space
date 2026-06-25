@@ -1,0 +1,151 @@
+test := import("@platforma-sdk/workflow-tengo:test")
+exec := import("@platforma-sdk/workflow-tengo:exec")
+rf := import(":resource-formula")
+
+f := exec.formula
+
+// A constant node carrying n GiB, the shape f.gib(n) produces — used to assert
+// clamp bounds without hardcoding the byte arithmetic.
+_gib := func(n) { return { op: "const", value: n * 1073741824 } }
+
+// -------- sequence-features path (lineCount-driven) --------
+
+TestSeqFeaturesCpu := func() {
+	plan := rf.buildResources("sequence-features", false)
+
+	// RAM: clamp(gib(8) + N*4096, gib(16), gib(128)) where N = lineCount("input").
+	test.isEqual("clamp", plan.memAst.op)
+	test.isEqual(_gib(16), plan.memAst.lo)
+	test.isEqual(_gib(128), plan.memAst.hi)
+	test.isEqual("metric", plan.memAst.value.b.a.op)         // N inside add(gib(8), mul(N, 4096))
+	test.isEqual("lineCount", plan.memAst.value.b.a.metric)
+	test.isEqual("input", plan.memAst.value.b.a.tag)
+
+	// CPU is a formula on the CPU path: clamp(divCeil(N, 250000), 4, 16).
+	test.isTrue(!is_undefined(plan.cpuAst), "CPU path must produce a cpu formula")
+	test.isEqual("clamp", plan.cpuAst.op)
+	test.isEqual("divCeil", plan.cpuAst.value.op)
+	test.isEqual({ op: "const", value: 4 }, plan.cpuAst.lo)
+	test.isEqual({ op: "const", value: 16 }, plan.cpuAst.hi)
+
+	// No GPU on the CPU path.
+	test.isTrue(is_undefined(plan.gpuAst), "CPU path must not produce a gpu formula")
+
+	test.isEqual(64, plan.staticMemGiB)
+	test.isEqual(8, plan.staticCpu)
+}
+
+TestSeqFeaturesGpu := func() {
+	plan := rf.buildResources("sequence-features", true)
+
+	// RAM stays small on the GPU host: clamp(gib(2) + N*1024, gib(4), gib(16)).
+	test.isEqual("clamp", plan.memAst.op)
+	test.isEqual(_gib(4), plan.memAst.lo)
+	test.isEqual(_gib(16), plan.memAst.hi)
+
+	// CPU is fixed (not a formula) on the GPU path.
+	test.isTrue(is_undefined(plan.cpuAst), "GPU path uses a fixed host CPU, not a formula")
+	test.isEqual(1, plan.staticCpu)
+
+	// GPU VRAM formula: clamp(gib(2) + N*512, gib(8), gib(48)), driven by lineCount.
+	test.isTrue(!is_undefined(plan.gpuAst), "GPU path must produce a gpu formula")
+	test.isEqual("clamp", plan.gpuAst.op)
+	test.isEqual(_gib(8), plan.gpuAst.lo)
+	test.isEqual(_gib(48), plan.gpuAst.hi)
+	test.isEqual("lineCount", plan.gpuAst.value.b.a.metric)
+	test.isEqual("input", plan.gpuAst.value.b.a.tag)
+
+	test.isEqual(8, plan.staticMemGiB)
+	test.isEqual("16GiB", plan.staticGpuMem)
+}
+
+// -------- embedding path (size-driven) --------
+
+TestEmbeddingCpu := func() {
+	plan := rf.buildResources("embedding", false)
+
+	// RAM: clamp(gib(8) + fileSize*12, gib(16), gib(128)), driven by size("input").
+	test.isEqual("clamp", plan.memAst.op)
+	test.isEqual(_gib(16), plan.memAst.lo)
+	test.isEqual(_gib(128), plan.memAst.hi)
+	test.isEqual("size", plan.memAst.value.b.a.metric)
+	test.isEqual("input", plan.memAst.value.b.a.tag)
+
+	// CPU formula: clamp(divCeil(fileSize, gib(4)), 4, 16).
+	test.isTrue(!is_undefined(plan.cpuAst), "embedding CPU path must produce a cpu formula")
+	test.isEqual("divCeil", plan.cpuAst.value.op)
+
+	test.isTrue(is_undefined(plan.gpuAst), "CPU path must not produce a gpu formula")
+	test.isEqual(64, plan.staticMemGiB)
+	test.isEqual(8, plan.staticCpu)
+}
+
+TestEmbeddingGpu := func() {
+	plan := rf.buildResources("embedding", true)
+
+	test.isEqual("clamp", plan.memAst.op)
+	test.isEqual(_gib(4), plan.memAst.lo)
+	test.isEqual(_gib(16), plan.memAst.hi)
+
+	test.isTrue(is_undefined(plan.cpuAst), "GPU path uses a fixed host CPU, not a formula")
+	test.isEqual(1, plan.staticCpu)
+
+	// GPU VRAM: clamp(gib(2) + fileSize*8, gib(8), gib(48)), driven by size.
+	test.isTrue(!is_undefined(plan.gpuAst), "embedding GPU path must produce a gpu formula")
+	test.isEqual("clamp", plan.gpuAst.op)
+	test.isEqual(_gib(8), plan.gpuAst.lo)
+	test.isEqual(_gib(48), plan.gpuAst.hi)
+	test.isEqual("size", plan.gpuAst.value.b.a.metric)
+
+	test.isEqual(8, plan.staticMemGiB)
+}
+
+// -------- evaluation: the formulas produce sane positive byte/core values --------
+// A fake resolver lets us evaluate the ASTs end-to-end (the same evaluate() the
+// pure exec template uses), pinning the clamp bounds against concrete metric values.
+
+_resolver := func(sizeBytes, lineCount) {
+	return {
+		size:      func(files) { return sizeBytes },
+		lineCount: func(files) { return lineCount }
+	}
+}
+
+// The builder resolves "metric" -> "metricSum" (binding the tag to a concrete file
+// list) before the pure template evaluates. Mirror that here: bind tag "input" to
+// one file so the evaluator sees metricSum, exactly as it does at run time.
+_eval := func(ast, sizeBytes, lineCount, label) {
+	resolved := f.resolveAst(ast, { "input": ["sequences.tsv"] }, ["sequences.tsv"])
+	return f.evaluateResource(resolved, _resolver(sizeBytes, lineCount), label)
+}
+
+TestSeqFeaturesCpuMemClampsAndScales := func() {
+	plan := rf.buildResources("sequence-features", false)
+
+	// Tiny N -> RAM floored at 16 GiB.
+	test.isEqual(16 * 1073741824, _eval(plan.memAst, 0, 1000, "ram"))
+
+	// Huge N (10M clonotypes * 4096 B = ~38 GiB + 8 GiB base) -> within [16,128] GiB.
+	mid := _eval(plan.memAst, 0, 10000000, "ram")
+	test.isTrue(mid > 16 * 1073741824 && mid < 128 * 1073741824, "mid RAM must land inside the clamp window")
+
+	// Enormous N -> capped at 128 GiB.
+	test.isEqual(128 * 1073741824, _eval(plan.memAst, 0, 1000000000, "ram"))
+}
+
+TestSeqFeaturesGpuVramClamps := func() {
+	plan := rf.buildResources("sequence-features", true)
+
+	// Tiny N -> VRAM floored at 8 GiB.
+	test.isEqual(8 * 1073741824, _eval(plan.gpuAst, 0, 1000, "gpuMemory"))
+
+	// Enormous N -> VRAM capped at 48 GiB.
+	test.isEqual(48 * 1073741824, _eval(plan.gpuAst, 0, 1000000000, "gpuMemory"))
+}
+
+TestEmbeddingGpuVramClamps := func() {
+	plan := rf.buildResources("embedding", true)
+
+	test.isEqual(8 * 1073741824, _eval(plan.gpuAst, 1000, 0, "gpuMemory"))
+	test.isEqual(48 * 1073741824, _eval(plan.gpuAst, 100 * 1073741824, 0, "gpuMemory"))
+}
