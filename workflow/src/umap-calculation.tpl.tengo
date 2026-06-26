@@ -56,13 +56,16 @@ self.body(func(args) {
         // returns RAM/CPU/GPU formula ASTs plus static fallbacks; we apply them to
         // the builder here.
         //
-        // RAM is always a formula; CPU is a formula only on the CPU paths (the GPU
-        // paths use a small fixed host CPU). Each formula carries a static fallback
-        // so the request still resolves on backends that can't evaluate formulas at
-        // run time (no getBlobSize). On a GPU-capable backend we add a GPU VRAM
-        // formula too — useGpu already folds in `exec.hasGpu`, so this stays off on
-        // GPU-less backends.
-        plan := resourceFormula.buildResources(inputMode, useGpu)
+        // RAM is always a formula; CPU is a formula only on the CPU paths. The GPU
+        // path floors host CPU/RAM at args.cpu / args.mem (GiB) — the block's data
+        // fields — so that if the GPU software silently falls back to CPU compute it
+        // still has a workable allocation instead of a 1-core / few-GiB host. Each
+        // formula carries a static fallback so the request still resolves on backends
+        // that can't evaluate formulas at run time (no getBlobSize); the GPU-path
+        // fallback uses those same data-driven minimums. On a GPU-capable backend we
+        // add a GPU VRAM formula too — useGpu already folds in `exec.hasGpu`, so this
+        // stays off on GPU-less backends.
+        plan := resourceFormula.buildResources(inputMode, useGpu, args.cpu, args.mem)
 
         builder = builder.memFormula(plan.memAst, { fallback: string(plan.staticMemGiB) + "GiB" })
         if !is_undefined(plan.cpuAst) {

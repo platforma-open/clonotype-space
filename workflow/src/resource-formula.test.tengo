@@ -8,12 +8,17 @@ f := exec.formula
 // clamp bounds without hardcoding the byte arithmetic.
 _gib := func(n) { return { op: "const", value: n * 1073741824 } }
 
+// GPU-host minimums under test (mirror the data fields args.cpu / args.mem).
+_MIN_CPU := 4
+_MIN_MEM := 7
+
 // -------- sequence-features path (lineCount-driven) --------
 
 TestSeqFeaturesCpu := func() {
-	plan := rf.buildResources("sequence-features", false)
+	plan := rf.buildResources("sequence-features", false, _MIN_CPU, _MIN_MEM)
 
 	// RAM: clamp(gib(8) + N*4096, gib(16), gib(128)) where N = lineCount("input").
+	// The CPU path is unaffected by the GPU-host minimums.
 	test.isEqual("clamp", plan.memAst.op)
 	test.isEqual(_gib(16), plan.memAst.lo)
 	test.isEqual(_gib(128), plan.memAst.hi)
@@ -36,16 +41,19 @@ TestSeqFeaturesCpu := func() {
 }
 
 TestSeqFeaturesGpu := func() {
-	plan := rf.buildResources("sequence-features", true)
+	plan := rf.buildResources("sequence-features", true, _MIN_CPU, _MIN_MEM)
 
-	// RAM stays small on the GPU host: clamp(gib(2) + N*1024, gib(4), gib(16)).
-	test.isEqual("clamp", plan.memAst.op)
-	test.isEqual(_gib(4), plan.memAst.lo)
-	test.isEqual(_gib(16), plan.memAst.hi)
+	// RAM on the GPU host: max(clamp(gib(2) + N*1024, gib(4), gib(16)), gib(minMem)).
+	// The outer max floors the scaled host RAM at the data-driven minimum.
+	test.isEqual("max", plan.memAst.op)
+	test.isEqual(_gib(_MIN_MEM), plan.memAst.b)              // floor = gib(minMem)
+	test.isEqual("clamp", plan.memAst.a.op)
+	test.isEqual(_gib(4), plan.memAst.a.lo)
+	test.isEqual(_gib(16), plan.memAst.a.hi)
 
-	// CPU is fixed (not a formula) on the GPU path.
+	// CPU is fixed (not a formula) on the GPU path, set to the data-driven minimum.
 	test.isTrue(is_undefined(plan.cpuAst), "GPU path uses a fixed host CPU, not a formula")
-	test.isEqual(1, plan.staticCpu)
+	test.isEqual(_MIN_CPU, plan.staticCpu)
 
 	// GPU VRAM formula: clamp(gib(2) + N*512, gib(8), gib(48)), driven by lineCount.
 	test.isTrue(!is_undefined(plan.gpuAst), "GPU path must produce a gpu formula")
@@ -55,14 +63,15 @@ TestSeqFeaturesGpu := func() {
 	test.isEqual("lineCount", plan.gpuAst.value.b.a.metric)
 	test.isEqual("input", plan.gpuAst.value.b.a.tag)
 
-	test.isEqual(8, plan.staticMemGiB)
+	// Fallback RAM == the data-driven minimum (minimal request connected to data).
+	test.isEqual(_MIN_MEM, plan.staticMemGiB)
 	test.isEqual("16GiB", plan.staticGpuMem)
 }
 
 // -------- embedding path (size-driven) --------
 
 TestEmbeddingCpu := func() {
-	plan := rf.buildResources("embedding", false)
+	plan := rf.buildResources("embedding", false, _MIN_CPU, _MIN_MEM)
 
 	// RAM: clamp(gib(8) + fileSize*12, gib(16), gib(128)), driven by size("input").
 	test.isEqual("clamp", plan.memAst.op)
@@ -81,14 +90,17 @@ TestEmbeddingCpu := func() {
 }
 
 TestEmbeddingGpu := func() {
-	plan := rf.buildResources("embedding", true)
+	plan := rf.buildResources("embedding", true, _MIN_CPU, _MIN_MEM)
 
-	test.isEqual("clamp", plan.memAst.op)
-	test.isEqual(_gib(4), plan.memAst.lo)
-	test.isEqual(_gib(16), plan.memAst.hi)
+	// RAM on the GPU host floored at the data-driven minimum.
+	test.isEqual("max", plan.memAst.op)
+	test.isEqual(_gib(_MIN_MEM), plan.memAst.b)
+	test.isEqual("clamp", plan.memAst.a.op)
+	test.isEqual(_gib(4), plan.memAst.a.lo)
+	test.isEqual(_gib(16), plan.memAst.a.hi)
 
 	test.isTrue(is_undefined(plan.cpuAst), "GPU path uses a fixed host CPU, not a formula")
-	test.isEqual(1, plan.staticCpu)
+	test.isEqual(_MIN_CPU, plan.staticCpu)
 
 	// GPU VRAM: clamp(gib(2) + fileSize*8, gib(8), gib(48)), driven by size.
 	test.isTrue(!is_undefined(plan.gpuAst), "embedding GPU path must produce a gpu formula")
@@ -97,7 +109,7 @@ TestEmbeddingGpu := func() {
 	test.isEqual(_gib(48), plan.gpuAst.hi)
 	test.isEqual("size", plan.gpuAst.value.b.a.metric)
 
-	test.isEqual(8, plan.staticMemGiB)
+	test.isEqual(_MIN_MEM, plan.staticMemGiB)
 }
 
 // -------- evaluation: the formulas produce sane positive byte/core values --------
@@ -120,7 +132,7 @@ _eval := func(ast, sizeBytes, lineCount, label) {
 }
 
 TestSeqFeaturesCpuMemClampsAndScales := func() {
-	plan := rf.buildResources("sequence-features", false)
+	plan := rf.buildResources("sequence-features", false, _MIN_CPU, _MIN_MEM)
 
 	// Tiny N -> RAM floored at 16 GiB.
 	test.isEqual(16 * 1073741824, _eval(plan.memAst, 0, 1000, "ram"))
@@ -133,8 +145,18 @@ TestSeqFeaturesCpuMemClampsAndScales := func() {
 	test.isEqual(128 * 1073741824, _eval(plan.memAst, 0, 1000000000, "ram"))
 }
 
+TestSeqFeaturesGpuMemFlooredAtMinimum := func() {
+	plan := rf.buildResources("sequence-features", true, _MIN_CPU, _MIN_MEM)
+
+	// Tiny N -> scaled host RAM (~4 GiB) is raised to the minMem floor (7 GiB).
+	test.isEqual(_MIN_MEM * 1073741824, _eval(plan.memAst, 0, 1000, "ram"))
+
+	// Enormous N -> scaled host RAM hits its 16 GiB cap, above the 7 GiB floor.
+	test.isEqual(16 * 1073741824, _eval(plan.memAst, 0, 1000000000, "ram"))
+}
+
 TestSeqFeaturesGpuVramClamps := func() {
-	plan := rf.buildResources("sequence-features", true)
+	plan := rf.buildResources("sequence-features", true, _MIN_CPU, _MIN_MEM)
 
 	// Tiny N -> VRAM floored at 8 GiB.
 	test.isEqual(8 * 1073741824, _eval(plan.gpuAst, 0, 1000, "gpuMemory"))
@@ -144,7 +166,7 @@ TestSeqFeaturesGpuVramClamps := func() {
 }
 
 TestEmbeddingGpuVramClamps := func() {
-	plan := rf.buildResources("embedding", true)
+	plan := rf.buildResources("embedding", true, _MIN_CPU, _MIN_MEM)
 
 	test.isEqual(8 * 1073741824, _eval(plan.gpuAst, 1000, 0, "gpuMemory"))
 	test.isEqual(48 * 1073741824, _eval(plan.gpuAst, 100 * 1073741824, 0, "gpuMemory"))
