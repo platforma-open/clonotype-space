@@ -1,5 +1,17 @@
 # @platforma-open/milaboratories.clonotype-space.model
 
+## 3.3.2
+
+### Patch Changes
+
+- feac133: Default missing `requireGpu` in stored block data to `true`. Projects saved before the field was added to `V20260518` came back with `requireGpu === undefined`, which the args lambda rejected and disabled the Run button. The lambda now coerces `undefined → true` (matching the defaults used by `init()` and `upgradeLegacy`) instead of throwing.
+
+## 3.3.1
+
+### Patch Changes
+
+- ccc4b64: Migrate block onto the structurer and refresh the SDK to latest (model/ui-vue/test 1.79.15, workflow-tengo 6.6.3, tengo-builder 4.0.9, block-tools 2.11.1). Tooling now fully managed by `block-tools structure`; removed retired toolchain deps (vite, eslint-config) and dead boilerplate workflow tests.
+
 ## 3.3.0
 
 ### Minor Changes

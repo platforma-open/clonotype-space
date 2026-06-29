@@ -1,6 +1,6 @@
 {
   "name": "@platforma-open/milaboratories.clonotype-space.model",
-  "version": "3.3.0",
+  "version": "3.3.2",
   "description": "Block model",
   "type": "module",
   "main": "dist/index.cjs",
@@ -18,7 +18,6 @@
     "build": "ts-builder build --target block-model && block-tools build-model",
     "watch": "ts-builder build --target block-model --watch",
     "type-check": "ts-builder type-check --target block-model",
-    "lint": "eslint .",
     "do-pack": "shx rm -f *.tgz && pnpm pack && shx mv *.tgz package.tgz",
     "fmt": "ts-builder format",
     "check": "ts-builder check --target block-model"
@@ -32,9 +31,7 @@
     "@milaboratories/ts-builder": "catalog:",
     "@milaboratories/ts-configs": "catalog:",
     "@platforma-sdk/block-tools": "catalog:",
-    "@platforma-sdk/eslint-config": "catalog:",
-    "eslint": "catalog:",
-    "vitest": "catalog:"
+    "eslint": "catalog:"
   },
   "peerDependencies": {
     "@types/node": "*",
