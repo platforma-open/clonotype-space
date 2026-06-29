@@ -29,7 +29,7 @@
     "oxfmt": "*",
     "oxlint": "*"
   },
-  "pnpm": {
+  "//pnpm": {
     "overrides": {
       "@platforma-sdk/workflow-tengo": "file:../../core/platforma/sdk/workflow-tengo/package.tgz",
       "@platforma-open/milaboratories.software-ptabler": "2.1.2",

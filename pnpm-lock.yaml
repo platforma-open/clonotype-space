@@ -51,6 +51,9 @@ catalogs:
     '@platforma-sdk/ui-vue':
       specifier: 1.79.14
       version: 1.79.14
+    '@platforma-sdk/workflow-tengo':
+      specifier: 6.6.3
+      version: 6.6.3
     '@vueuse/core':
       specifier: ^13.3.0
       version: 13.9.0
@@ -75,12 +78,6 @@ catalogs:
     vue:
       specifier: 3.5.24
       version: 3.5.24
-
-overrides:
-  '@platforma-sdk/workflow-tengo': file:../../core/platforma/sdk/workflow-tengo/package.tgz
-  '@platforma-open/milaboratories.software-ptabler': 2.1.2
-  '@platforma-open/milaboratories.software-ptexter': 1.2.2
-  '@platforma-open/milaboratories.software-small-binaries': ^2.1.1
 
 importers:
 
@@ -260,8 +257,8 @@ importers:
         specifier: workspace:*
         version: link:../software/umap
       '@platforma-sdk/workflow-tengo':
-        specifier: file:../../../core/platforma/sdk/workflow-tengo/package.tgz
-        version: file:../../core/platforma/sdk/workflow-tengo/package.tgz
+        specifier: 'catalog:'
+        version: 6.6.3
     devDependencies:
       '@platforma-sdk/tengo-builder':
         specifier: 'catalog:'
@@ -1354,9 +1351,6 @@ packages:
   '@milaboratories/pframes-rs-wasip2@1.1.50':
     resolution: {integrity: sha512-FHv6Cksyl9q9plIhRUzNP0cQ03aZVltNh+haZ5KGVNHh9e5PgP9ndnTP06bQ1JRyQ/6Thf1NF5yw1lBXp6J+uw==}
 
-  '@milaboratories/pframes-rs-wasip2@1.1.52':
-    resolution: {integrity: sha512-0rb0We6Q/aqrHJ062dayvLb4RExODZdqfsVWdzeHq23alY5TjJRMWsO9aKQpPnOuUKjAimdjlp+Ldq9TVhbEtg==}
-
   '@milaboratories/pframes-rs-wasm@1.1.50':
     resolution: {integrity: sha512-D7YvFltjAk+OLCC/5/U741Hipxof4v/t0cJbk+y38MJjx6PyGQhAyVP/J4XfbJgdFdTGdDidRCNGYLt/Jn8l3w==}
     peerDependencies:
@@ -1834,9 +1828,8 @@ packages:
   '@platforma-sdk/ui-vue@1.79.14':
     resolution: {integrity: sha512-KRc+4YOKKes1uwpKBgx9PeJozpGOS2uLt4XljgFupnoU4PyNZjw2I8ZTLtvq0Ld9o5T/ieUCRgiXgx4i4O+QBg==}
 
-  '@platforma-sdk/workflow-tengo@file:../../core/platforma/sdk/workflow-tengo/package.tgz':
-    resolution: {integrity: sha512-NlQ641a3pg8mOk/qY1Iy+Y4aFoYr8MvVy7jpqa5NqIjnxYT9hKBeVDeBWbnQeguxPoNipeqWgj+yTMugx6PG8g==, tarball: file:../../core/platforma/sdk/workflow-tengo/package.tgz}
-    version: 6.6.5
+  '@platforma-sdk/workflow-tengo@6.6.3':
+    resolution: {integrity: sha512-2H83hEd+t8pIcSpz0anmWb0wesEcoXCYl9HSOcfQL9b0ro6EDf+PwyafXtmbXl2kMtkpccigbhDGZdDhoMpr7w==}
 
   '@protobuf-ts/grpc-transport@2.11.1':
     resolution: {integrity: sha512-l6wrcFffY+tuNnuyrNCkRM8hDIsAZVLA8Mn7PKdVyYxITosYh60qW663p9kL6TWXYuDCL3oxH8ih3vLKTDyhtg==}
@@ -8297,8 +8290,6 @@ snapshots:
 
   '@milaboratories/pframes-rs-wasip2@1.1.50': {}
 
-  '@milaboratories/pframes-rs-wasip2@1.1.52': {}
-
   '@milaboratories/pframes-rs-wasm@1.1.50(@bytecodealliance/preview2-shim@0.17.8)(@milaboratories/pl-model-common@1.46.1)(@milaboratories/pl-model-middle-layer@1.30.6)':
     dependencies:
       '@bytecodealliance/preview2-shim': 0.17.8
@@ -8415,7 +8406,7 @@ snapshots:
       '@milaboratories/ts-helpers': 1.8.3
       '@platforma-sdk/block-tools': 2.11.0(@types/node@25.0.3)
       '@platforma-sdk/model': 1.79.14
-      '@platforma-sdk/workflow-tengo': file:../../core/platforma/sdk/workflow-tengo/package.tgz
+      '@platforma-sdk/workflow-tengo': 6.6.3
       canonicalize: 2.1.0
       denque: 2.1.0
       es-toolkit: 1.43.0
@@ -9104,9 +9095,9 @@ snapshots:
       - typescript
       - universal-cookie
 
-  '@platforma-sdk/workflow-tengo@file:../../core/platforma/sdk/workflow-tengo/package.tgz':
+  '@platforma-sdk/workflow-tengo@6.6.3':
     dependencies:
-      '@milaboratories/pframes-rs-wasip2': 1.1.52
+      '@milaboratories/pframes-rs-wasip2': 1.1.50
       '@milaboratories/software-pframes-conv': 2.2.9
       '@platforma-open/milaboratories.software-ptabler': 2.1.2
       '@platforma-open/milaboratories.software-ptexter': 1.2.2
