@@ -75,7 +75,16 @@ self.body(func(inputs) {
 		sequencesRef := inputs.sequencesRef
 
 		// compute the shortest peptide length
-		isPeptide := datasetSpec.axesSpec[1].name == "pl7.app/variantKey"
+		// Both peptide-extraction and synthetic-repertoire-profiler key on
+		// pl7.app/variantKey; the axis domain tells them apart. Only peptide-extraction
+		// (pl7.app/peptide/extractionRunId) emits the pl7.app/sequenceLength column the
+		// short-peptide tuning needs. Amplicon input (pl7.app/repertoire/extractionRunId)
+		// is not peptide, so it skips the length lookup and the kmer override entirely.
+		keyAxis := datasetSpec.axesSpec[1]
+		keyAxisDomain := is_undefined(keyAxis.domain) ? {} : keyAxis.domain
+		isAmplicon := keyAxis.name == "pl7.app/variantKey" &&
+			!is_undefined(keyAxisDomain["pl7.app/repertoire/extractionRunId"])
+		isPeptide := keyAxis.name == "pl7.app/variantKey" && !isAmplicon
 		minPeptideLength := undefined
 		if isPeptide {
 			peptideLenCols := columns.getColumns("peptideSequenceLength")
