@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space
 
+## 3.4.4
+
+### Patch Changes
+
+- 4be629b: Publish new version
+
 ## 3.4.3
 
 ### Patch Changes
