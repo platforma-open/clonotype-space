@@ -112,7 +112,13 @@ export const platforma = BlockModelV3.create(blockDataModel)
         : undefined;
       if (!spec) return undefined;
       for (const ax of spec.axesSpec) {
-        if (ax.name === "pl7.app/variantKey") return "peptide";
+        if (ax.name === "pl7.app/variantKey") {
+          // peptide-extraction and synthetic-repertoire-profiler share this axis;
+          // the domain distinguishes them (see sequenceOptions for the same check).
+          return (ax.domain ?? {})["pl7.app/repertoire/extractionRunId"] !== undefined
+            ? "amplicon"
+            : "peptide";
+        }
         if (ax.name === "pl7.app/vdj/clonotypeKey" || ax.name === "pl7.app/vdj/scClonotypeKey")
           return "antibody_tcr";
       }
@@ -125,10 +131,15 @@ export const platforma = BlockModelV3.create(blockDataModel)
     const ref = ctx.data.inputAnchor;
     if (ref === undefined) return undefined;
 
-    const axis1Name = ctx.resultPool.getPColumnSpecByRef(ref)?.axesSpec[1].name;
-    const inputKind: "peptide" | "singleCell" | "bulk" =
+    const keyAxis = ctx.resultPool.getPColumnSpecByRef(ref)?.axesSpec[1];
+    const axis1Name = keyAxis?.name;
+    const keyAxisDomain = keyAxis?.domain ?? {};
+
+    const inputKind: "peptide" | "amplicon" | "singleCell" | "bulk" =
       axis1Name === "pl7.app/variantKey"
-        ? "peptide"
+        ? keyAxisDomain["pl7.app/repertoire/extractionRunId"] !== undefined
+          ? "amplicon"
+          : "peptide"
         : axis1Name === "pl7.app/vdj/scClonotypeKey"
           ? "singleCell"
           : "bulk";
@@ -143,6 +154,15 @@ export const platforma = BlockModelV3.create(blockDataModel)
           axes: [{ anchor: "main", idx: 1 }],
           name: "pl7.app/sequence",
           domain: { "pl7.app/feature": "peptide" },
+        });
+        break;
+      case "amplicon":
+        // synthetic-repertoire-profiler keys sequences on pl7.app/variantKey but tags
+        // each with a feature: the whole-variant sequence (feature "amplicon-sequence")
+        // and one per region (feature = region name)
+        sequenceMatchers.push({
+          axes: [{ anchor: "main", idx: 1 }],
+          name: "pl7.app/sequence",
         });
         break;
       case "singleCell":
