@@ -1,144 +1,93 @@
-// Resource formulas for the UMAP exec, extracted as a pure function so the
-// sizing logic can be unit-tested without a backend (see resource-formula.test.tengo).
+// Single source of truth for the UMAP exec's resource request.
+// Single source of truth for the UMAP exec's resource request.
 //
-// In "formula mode" (the default — the user has NOT ticked "set performance
-// settings directly"), RAM/CPU/GPU are derived from the input data at run time
-// via exec.formula instead of fixed values. buildResources() returns the plan;
-// umap-calculation.tpl.tengo applies it to the exec builder.
+// Resources can be set two ways:
+//   - data-driven (default): RAM / CPU / GPU scale with the input via exec.formula.
+//   - direct: the user typed explicit RAM / CPU / GPU values in the UI.
+// In both, a GPU is requested only when one is available (exec.hasGpu). In direct
+// mode the user additionally chooses whether to ask for a GPU at all.
 //
-// Per-clonotype / per-byte multipliers are sized from the UMAP software's memory
-// profile (polars + sparse k-mer matrix + SVD/UMAP on the CPU path; cuML on the
-// GPU path, where heavy compute lives in VRAM and host RAM stays small).
+// The UMAP software (software/umap/src/main.py) silently fallsback from cuML/GPU
+// to CPU compute when CUDA is missing or VRAM is short. So theGPU path never asks
+// for a bare host: it requests a floored, data-scaled host RAMplus a fixed core
+// count, enough for a CPU fallback to make progress instead of1crawling on 1 core.
 
 exec := import("@platforma-sdk/workflow-tengo:exec")
 f := exec.formula
 
-// buildResources(inputMode, useGpu, minCpu, minMemGiB) -> resource plan for the
-// UMAP exec.
-//
-// inputMode: "embedding" (binary long-format parquet — sized off f.size, since
-//   the SDK's lineCount supports only line-oriented text) or anything else, the
-//   "sequence-features" path (one TSV row per clonotype — sized off f.lineCount,
-//   an exact clonotype count N).
-// useGpu: whether a GPU is available and requested. On the GPU path the heavy
-//   compute runs in VRAM, so host RAM/CPU would otherwise be small — but the GPU
-//   software can silently fall back to CPU compute, where a 1-core / few-GiB host
-//   would take effectively forever. So the GPU path floors host CPU/RAM at the
-//   caller-supplied minimums (minCpu / minMemGiB) and still produces a VRAM
-//   formula. On the CPU path RAM and CPU scale with the data and gpuAst stays
-//   undefined.
-// minCpu: GPU-host CPU request (a hard minimum for CPU-fallback safety). Sourced
-//   from the block's `cpu` data field (args.cpu).
-// minMemGiB: GPU-host RAM floor in GiB. Sourced from the block's `mem` data field
-//   (args.mem). Both also serve as the GPU-path fallback when the backend cannot
-//   evaluate formulas, so the minimal request is data-driven end to end.
-//
-// Returns { memAst, cpuAst, gpuAst, staticMemGiB, staticCpu, staticGpuMem }:
-//   memAst       — RAM formula AST (always set)
-//   cpuAst       — CPU formula AST (set only on CPU paths; undefined on GPU paths,
-//                  where staticCpu is used directly)
-//   gpuAst       — GPU VRAM formula AST (set only when useGpu)
-//   staticMemGiB — RAM fallback (GiB) for backends that can't evaluate formulas
-//   staticCpu    — CPU cores: fallback on CPU paths, the literal request on GPU paths
-//   staticGpuMem — GPU VRAM fallback string (used only when useGpu)
-buildResources := func(inputMode, useGpu, minCpu, minMemGiB) {
-	res := {
-		memAst: undefined,
-		cpuAst: undefined,
-		gpuAst: undefined,
-		staticMemGiB: 0,
-		staticCpu: 0,
-		staticGpuMem: "16GiB"
-	}
+// GPU host floor (CPU-fallback safety). Lean compared to the full CPU path — the
+// heavy work is meant to run in VRAM — but never a sliver.
+gpuHostCpu := 4
+gpuHostMemMin := f.gib(8)
+gpuHostMemMax := f.gib(32)
 
-	if inputMode == "embedding" {
-		fileSize := f.size("input")
-		if useGpu {
-			// Host work: polars read_parquet -> dense float32 N×D matrix +
-			// np.unique dedup copy. Heavy compute (cuML PCA, cuML UMAP) lives in
-			// VRAM, so host RAM is dominated by the matrix. ~6× compressed-parquet
-			// size empirically, floored at minMemGiB so a CPU fallback stays viable.
-			res.memAst = f.max(
-				f.clamp(
-					f.add(f.gib(2), f.mul(fileSize, 6)),
-					f.gib(4),
-					f.gib(16)),
-				f.gib(minMemGiB))
-			// VRAM holds the dense N×D float32 matrix plus cuML PCA + UMAP working
-			// sets (KNN graph, transformed embedding). Scales with the dense data,
-			// ~8× compressed-parquet size. Floor 8 GiB so small inputs still land on
-			// a real GPU; cap 48 GiB (largest device tier).
-			res.gpuAst = f.clamp(
-				f.add(f.gib(2), f.mul(fileSize, 8)),
-				f.gib(8),
-				f.gib(48))
-			// Host CPU/RAM minimums (CPU-fallback safety), driven by block data.
-			res.staticMemGiB = minMemGiB
-			res.staticCpu = minCpu
-		} else {
-			// Dense matrix + dedup copy + sklearn PCA (materialises a centered
-			// copy) + sklearn UMAP KNN graph. ~12× file size.
-			res.memAst = f.clamp(
-				f.add(f.gib(8), f.mul(fileSize, 12)),
-				f.gib(16),
-				f.gib(128))
-			// CPU: 1 core per ~4 GiB of parquet, floored at 4 (PCA/UMAP
-			// parallelism), capped at 16 (returns diminish past that).
-			res.cpuAst = f.clamp(
-				f.divCeil(fileSize, f.gib(4)),
-				4,
-				16)
-			res.staticMemGiB = 64
-			res.staticCpu = 8
-		}
-	} else {
-		// sequence-features path: one TSV row per clonotype -> exact N.
-		N := f.lineCount("input")
-		if useGpu {
-			// Host work: polars DataFrame (~100 B per row) + sparse k-mer CSR
-			// (~400 B per row, transferred to VRAM). Heavy compute (cuML SVD/UMAP)
-			// lives in VRAM. ~1 KiB per clonotype on host, floored at minMemGiB so
-			// a CPU fallback stays viable.
-			res.memAst = f.max(
-				f.clamp(
-					f.add(f.gib(2), f.mul(N, 1024)),
-					f.gib(4),
-					f.gib(16)),
-				f.gib(minMemGiB))
-			// VRAM holds the sparse k-mer CSR (~400 B per clonotype, copied to the
-			// device) plus cuML TruncatedSVD + UMAP working sets. Budget ~512 B per
-			// clonotype on the device. Floor 8 GiB, cap 48 GiB.
-			res.gpuAst = f.clamp(
-				f.add(f.gib(2), f.mul(N, 512)),
-				f.gib(8),
-				f.gib(48))
-			// Host CPU/RAM minimums (CPU-fallback safety), driven by block data.
-			res.staticMemGiB = minMemGiB
-			res.staticCpu = minCpu
-		} else {
-			// CPU path: polars DF + sparse k-mer matrix (fit-sample capped at
-			// 200 k) + TruncatedSVD + sklearn UMAP fit on 100 k sample + chunked
-			// transform (50 k/chunk). Peak ~4 KiB per clonotype on top of an 8 GiB
-			// Python/polars/numpy/scipy base.
-			res.memAst = f.clamp(
-				f.add(f.gib(8), f.mul(N, 4096)),
-				f.gib(16),
-				f.gib(128))
-			// CPU: 1 core per 250 000 clonotypes — k-mer counting parallelises
-			// perfectly across cores; SVD/UMAP are largely single-thread. Floored
-			// at 4, capped at 16.
-			res.cpuAst = f.clamp(
-				f.divCeil(N, 250000),
-				4,
-				16)
-			res.staticMemGiB = 64
-			res.staticCpu = 8
-		}
-	}
+// The data signal per input mode: embedding is sized off the parquet byte size;
+// sequence-features off the clonotype count (one TSV line each).
+inputSize := func(inputMode) {
+    return inputMode == "embedding" ? f.size("input") : f.lineCount("input")
+}
 
-	return res
+// Per-byte / per-clonotype multiplier for a given mode and resource role.
+perUnit := func(inputMode, embeddingMul, sequenceMul) {
+    return f.mul(inputSize(inputMode), inputMode == "embedding" ? embeddingMul : sequenceMul)
+}
+
+// CPU-path RAM: dense matrix + SVD/UMAP working sets. embedding ~12x parquet size;
+// sequence ~4 KiB per clonotype, over an 8 GiB base. Clamp [16, 128] GiB.
+cpuMem := func(inputMode) {
+    return f.clamp(f.add(f.gib(8), perUnit(inputMode, 12, 4096)), f.gib(16), f.gib(128))
+}
+
+// CPU-path cores: 1 per ~4 GiB parquet (embedding) or per 250k clonotypes
+// (sequence). Clamp [4, 16] — k-mer counting parallelises, SVD/UMAP barely do.
+cpuCores := func(inputMode) {
+    divisor := inputMode == "embedding" ? f.gib(4) : 250000
+    return f.clamp(f.divCeil(inputSize(inputMode), divisor), 4, 16)
+}
+
+// GPU host RAM: lean, but floored so a silent CPU fallback still runs.
+gpuHostMem := func(inputMode) {
+    return f.clamp(f.add(f.gib(2), perUnit(inputMode, 6, 1024)), gpuHostMemMin, gpuHostMemMax)
+}
+// GPU VRAM: holds the dense/sparse matrix plus cuML PCA/SVD + UMAP working sets.
+// embedding ~8x parquet size; sequence ~512 B per clonotype. Clamp [8, 48] GiB.
+gpuVram := func(inputMode) {
+    return f.clamp(f.add(f.gib(2), perUnit(inputMode, 8, 512)),
+        f.gib(8), f.gib(48))
+}
+
+// apply(builder, args, inputMode) -> builder with mem / cpu / gpu requested.
+// The exec's input file must be added with { tag: "input" } so the formulas resolve.
+apply := func(builder, args, inputMode) {
+    direct := !is_undefined(args.directPerformanceSettings) && args.directPerformanceSettings
+
+    if direct {
+        builder = builder.mem(string(args.mem) + "GiB").cpu(args.cpu)
+        if args.requireGpu && exec.hasGpu {
+            gpuMem := is_undefined(args.gpuMemory) ? 16 : args.gpuMemory
+            builder = builder.gpuMemory(string(gpuMem) + "GiB")
+        }
+        return builder
+    }
+
+    // Data-driven: always try GPU; exec.hasGpu drops the request on GPU-less backends.
+    // Each formula carries a static fallback for backends that can't evaluate formulas.
+    if exec.hasGpu {
+        return builder.
+            memFormula(gpuHostMem(inputMode), { fallback: "16GiB" }).
+            cpu(gpuHostCpu).
+            gpuFormula(gpuVram(inputMode), { fallback: "16GiB" })
+    }
+    return builder.
+        memFormula(cpuMem(inputMode), { fallback: "64GiB" }).
+        cpuFormula(cpuCores(inputMode), { fallback: 8 })
 }
 
 export {
-	buildResources: buildResources
+    apply: apply,
+    // Exported for unit tests (resource-formula.test.tengo).
+    cpuMem: cpuMem,
+    cpuCores: cpuCores,
+    gpuHostMem: gpuHostMem,
+    gpuVram: gpuVram
 }

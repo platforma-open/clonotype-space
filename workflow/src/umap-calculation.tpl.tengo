@@ -9,74 +9,16 @@ json := import("json")
 self.defineOutputs("umapTsVFile", "umapOutput")
 
 self.body(func(args) {
-    // Input parameters (shared)
     umap_neighbors := args.umap_neighbors
     umap_min_dist := args.umap_min_dist
     inputMode := is_undefined(args.inputMode) ? "sequence-features" : args.inputMode
-    // When false (default), RAM/CPU are derived from input file size via
-    // exec.formula and the manual args below are ignored. When true, the
-    // workflow uses the static args.mem / args.cpu / args.requireGpu /
-    // args.gpuMemory values from the UI exactly as before.
-    directPerformanceSettings := !is_undefined(args.directPerformanceSettings) && args.directPerformanceSettings
 
-    // GPU intent: in direct mode the user controls requireGpu; in formula
-    // mode we always try GPU and let `exec.hasGpu` drop the request on
-    // backends without GPU support.
-    requireGpu := directPerformanceSettings ? args.requireGpu : true
-    useGpu := requireGpu && exec.hasGpu
-
-    // ====================================================================
-    // Resource setup
-    // ====================================================================
-
-    builder := exec.builder().
-        software(assets.importSoftware("@platforma-open/milaboratories.clonotype-space.umap:main"))
-
-    if directPerformanceSettings {
-        // -------- Direct mode: literal RAM / CPU values from the UI --------
-        // The user explicitly opted out of the formula via the "Set
-        // performance settings directly" checkbox, so do not second-guess
-        // them: pass args.mem and args.cpu through unchanged on both the
-        // CPU and the GPU path. If they want a lean GPU-host allocation
-        // they can type it; if they want symmetric CPU+GPU sizing for
-        // benchmarking they can type that too.
-        builder = builder.
-            mem(string(args.mem) + "GiB").
-            cpu(args.cpu)
-
-        if useGpu {
-            // 16 GiB fallback when the user leaves the GPU memory field empty.
-            effectiveGpuMemory := is_undefined(args.gpuMemory) ? 16 : args.gpuMemory
-            builder = builder.gpuMemory(string(effectiveGpuMemory) + "GiB")
-        }
-    } else {
-        // -------- Formula mode: derive RAM / CPU / GPU from input size --------
-        // The sizing logic lives in :resource-formula (a pure function) so it can
-        // be unit-tested without a backend (see resource-formula.test.tengo). It
-        // returns RAM/CPU/GPU formula ASTs plus static fallbacks; we apply them to
-        // the builder here.
-        //
-        // RAM is always a formula; CPU is a formula only on the CPU paths. The GPU
-        // path floors host CPU/RAM at args.cpu / args.mem (GiB) — the block's data
-        // fields — so that if the GPU software silently falls back to CPU compute it
-        // still has a workable allocation instead of a 1-core / few-GiB host. Each
-        // formula carries a static fallback so the request still resolves on backends
-        // that can't evaluate formulas at run time (no getBlobSize); the GPU-path
-        // fallback uses those same data-driven minimums. On a GPU-capable backend we
-        // add a GPU VRAM formula too — useGpu already folds in `exec.hasGpu`, so this
-        // stays off on GPU-less backends.
-        plan := resourceFormula.buildResources(inputMode, useGpu, args.cpu, args.mem)
-
-        builder = builder.memFormula(plan.memAst, { fallback: string(plan.staticMemGiB) + "GiB" })
-        if !is_undefined(plan.cpuAst) {
-            builder = builder.cpuFormula(plan.cpuAst, { fallback: plan.staticCpu })
-        } else {
-            builder = builder.cpu(plan.staticCpu)
-        }
-        if useGpu {
-            builder = builder.gpuFormula(plan.gpuAst, { fallback: plan.staticGpuMem })
-        }
-    }
+    // All RAM / CPU / GPU sizing lives in :resource-formula. The input file is
+    // added below with { tag: "input" } so the data-driven formulas resolve.
+    builder := resourceFormula.apply(
+        exec.builder().
+            software(assets.importSoftware("@platforma-open/milaboratories.clonotype-space.umap:main")),
+        args, inputMode)
 
     if inputMode == "embedding" {
         // Embedding feature path: main.py reads the exported Parquet matrix instead of counting k-mers
