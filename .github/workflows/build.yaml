@@ -11,7 +11,7 @@ on:
   workflow_dispatch: {}
 jobs:
   init:
-    runs-on: ubuntu-latest
+    runs-on: hz-ubuntu-dind
     steps:
       - uses: milaboratory/github-ci/actions/context/init@v4
         with:
