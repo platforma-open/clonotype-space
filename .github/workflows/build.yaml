@@ -20,11 +20,12 @@ jobs:
   run:
     needs:
       - init
-    uses: milaboratory/github-ci/.github/workflows/node-simple-pnpm.yaml@v4
+    uses: milaboratory/github-ci/.github/workflows/node-simple-pnpm.yaml@v4-beta
     with:
       app-name: 'Block: Clonotype Space'
       app-name-slug: 'block-clonotype-space'
       node-version: '20.x'
+      gha-runner-label: hz-ubuntu-dind
       build-script-name: 'build'
       pnpm-recursive-build: false
 
@@ -33,9 +34,11 @@ jobs:
       pnpm-recursive-tests: false
       team-id: 'ciplopen'
 
-      publish-to-public: 'true'
+      # DRY RUN (test/hz-runner-rgw-cache): publish + tag disabled so a test build
+      # can't cut a release. Revert to 'true' when promoting the migration.
+      publish-to-public: 'false'
       package-path: 'block'
-      create-tag: 'true'
+      create-tag: 'false'
 
       npmrc-config: |
         {
@@ -56,6 +59,15 @@ jobs:
 
           "AWS_CI_IAM_MONOREPO_SIMPLE_ROLE": ${{ toJSON(secrets.AWS_CI_IAM_MONOREPO_SIMPLE_ROLE) }},
           "AWS_CI_TURBOREPO_S3_BUCKET": ${{ toJSON(secrets.AWS_CI_TURBOREPO_S3_BUCKET) }},
+
+          "HZ_CI_TURBO_S3_BUCKET": ${{ toJSON(vars.HZ_CI_TURBO_S3_BUCKET) }},
+          "HZ_CI_TURBO_S3_ENDPOINT": ${{ toJSON(vars.HZ_CI_TURBO_S3_ENDPOINT) }},
+          "HZ_CI_TURBO_S3_REGION": ${{ toJSON(vars.HZ_CI_TURBO_S3_REGION) }},
+          "HZ_CI_TURBO_S3_ACCESS_KEY": ${{ toJSON(secrets.HZ_CI_TURBO_S3_ACCESS_KEY) }},
+          "HZ_CI_TURBO_S3_SECRET_KEY": ${{ toJSON(secrets.HZ_CI_TURBO_S3_SECRET_KEY) }},
+          "HZ_CI_CACHE_S3_ACCESS_KEY": ${{ toJSON(secrets.HZ_CI_CACHE_S3_ACCESS_KEY) }},
+          "HZ_CI_CACHE_S3_SECRET_KEY": ${{ toJSON(secrets.HZ_CI_CACHE_S3_SECRET_KEY) }},
+
           "PL_REGISTRY_PLATFORMA_OPEN_UPLOAD_URL": ${{ toJSON(secrets.PL_REGISTRY_PLOPEN_UPLOAD_URL) }},
           "QUAY_USERNAME": ${{ toJSON(secrets.QUAY_USERNAME) }},
           "QUAY_ROBOT_TOKEN": ${{ toJSON(secrets.QUAY_ROBOT_TOKEN) }} }
