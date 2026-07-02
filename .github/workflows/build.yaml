@@ -20,7 +20,7 @@ jobs:
   run:
     needs:
       - init
-    uses: milaboratory/github-ci/.github/workflows/node-simple-pnpm.yaml@v4-beta
+    uses: milaboratory/github-ci/.github/workflows/node-simple-pnpm.yaml@v4
     with:
       app-name: 'Block: Clonotype Space'
       app-name-slug: 'block-clonotype-space'
@@ -34,11 +34,9 @@ jobs:
       pnpm-recursive-tests: false
       team-id: 'ciplopen'
 
-      # DRY RUN (test/hz-runner-rgw-cache): publish + tag disabled so a test build
-      # can't cut a release. Revert to 'true' when promoting the migration.
-      publish-to-public: 'false'
+      publish-to-public: 'true'
       package-path: 'block'
-      create-tag: 'false'
+      create-tag: 'true'
 
       npmrc-config: |
         {
