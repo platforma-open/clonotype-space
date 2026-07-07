@@ -4,12 +4,15 @@ rf := import(":resource-formula")
 
 f := exec.formula
 
-// Evaluate a resource AST end-to-end against fake metric values, mirroring what
-// the builder does at run time: bind tag "input" to a file, then evaluate.
-// fileName picks a line-oriented name for lineCount-based (sequence) formulas
-// and a parquet name for size-based (embedding) formulas.
-_eval := func(ast, fileName, sizeBytes, lineCount) {
-    resolved := f.resolveAst(ast, { "input": [fileName] }, [fileName])
+_gib := func(n) { return n * 1073741824 }
+
+// Evaluate a resource formula (a fluent exec.formula node) against fake metric
+// values, mirroring what the exec builder does at run time: bind tag "input" to a
+// file, resolve metric -> files, then evaluate. sizeBytes drives f.size();
+// lineCount drives f.lineCount(). fileName only needs a line-oriented extension
+// for lineCount inputs (size is always compatible).
+_eval := func(node, fileName, sizeBytes, lineCount) {
+    resolved := f.resolveAst(node, { "input": [fileName] }, [fileName])
     resolver := {
         size:      func(files) { return sizeBytes },
         lineCount: func(files) { return lineCount }
@@ -17,82 +20,104 @@ _eval := func(ast, fileName, sizeBytes, lineCount) {
     return f.evaluateResource(resolved, resolver, "test")
 }
 
-_gib := func(n) { return n * 1073741824 }
-
-// -------- CPU-path RAM: clamp [16, 128] GiB, scales with input --------
-
-TestCpuMemSequence := func() {
-    ast := rf.cpuMem("sequence-features")
-    test.isEqual(_gib(16), _eval(ast, "input.tsv", 0, 1000))            // tiny -> floor
-    test.isEqual(_gib(128), _eval(ast, "input.tsv", 0, 1000000000))     // huge -> cap
-    mid := _eval(ast, "input.tsv", 0, 10000000)
-    test.isTrue(mid > _gib(16) && mid < _gib(128), "mid RAM must land inside the clamp window")
-}
-
-TestCpuMemEmbedding := func() {
-    ast := rf.cpuMem("embedding")
-    test.isEqual(_gib(16), _eval(ast, "input.parquet", 0, 0))
-    test.isEqual(_gib(128), _eval(ast, "input.parquet", 100 * _gib(1), 0))
-}
-
-// -------- CPU-path cores: clamp [4, 16] --------
-
-TestCpuCores := func() {
-    seq := rf.cpuCores("sequence-features")
-    test.isEqual(4, _eval(seq, "input.tsv", 0, 1000))                   // tiny -> floor
-    test.isEqual(16, _eval(seq, "input.tsv", 0, 1000000000))           // huge -> cap
-
-    emb := rf.cpuCores("embedding")
-    test.isEqual(4, _eval(emb, "input.parquet", 1000, 0))
-    test.isEqual(16, _eval(emb, "input.parquet", 100 * _gib(1), 0))
-}
-
-// -------- GPU host RAM: floored at 8 GiB, capped at 32 GiB --------
-
-TestGpuHostMem := func() {
-    seq := rf.gpuHostMem("sequence-features")
-    test.isEqual(_gib(8), _eval(seq, "input.tsv", 0, 1000))             // tiny -> 8 GiB floor
-    test.isEqual(_gib(32), _eval(seq, "input.tsv", 0, 1000000000))     // huge -> 32 GiB cap
-
-    emb := rf.gpuHostMem("embedding")
-    test.isEqual(_gib(8), _eval(emb, "input.parquet", 1000, 0))
-}
-
-// -------- GPU VRAM: clamp [8, 48] GiB --------
-
-TestGpuVram := func() {
-    seq := rf.gpuVram("sequence-features")
-    test.isEqual(_gib(8), _eval(seq, "input.tsv", 0, 1000))
-    test.isEqual(_gib(48), _eval(seq, "input.tsv", 0, 1000000000))
-
-    emb := rf.gpuVram("embedding")
-    test.isEqual(_gib(8), _eval(emb, "input.parquet", 1000, 0))
-    test.isEqual(_gib(48), _eval(emb, "input.parquet", 100 * _gib(1), 0))
-}
-
-// -------- apply: direct mode wires literal UI values onto the builder --------
-
-_mockBuilder := func() {
+// Minimal builder stub: records the single resources({...}) spec the function
+// under test builds, so assertions run without a live builder / backend.
+_mock := func() {
     self := undefined
     self = {
         calls: {},
-        mem:        func(v)    { self.calls.mem = v; return self },
-        cpu:        func(v)    { self.calls.cpu = v; return self },
-        gpuMemory:  func(v)    { self.calls.gpuMemory = v; return self },
-        memFormula: func(a, o) { self.calls.memFormula = a; return self },
-        cpuFormula: func(a, o) { self.calls.cpuFormula = a; return self },
-        gpuFormula: func(a, o) { self.calls.gpuFormula = a; return self }
+        resources: func(spec) { self.calls.spec = spec; return self }
     }
     return self
 }
 
+// -------- resourcesEmbeddings: size-driven (parquet byte size) --------------
+
+TestResourcesEmbeddings := func() {
+    b := _mock()
+    rf.resourcesEmbeddings(b)
+    spec := b.calls.spec
+    F := "input.parquet"
+
+    // onCPU.cpu = clamp(divCeil(size, 4GiB), [4, 16]); fallback 8
+    test.isEqual(4,  _eval(spec.onCPU.cpu, F, 0, 0))                 // tiny -> floor
+    test.isEqual(16, _eval(spec.onCPU.cpu, F, 100 * _gib(1), 0))    // huge -> cap
+    test.isEqual(8,  f.fallbackOf(spec.onCPU.cpu))
+
+    // onCPU.ram = clamp(12*size + 8GiB, [16, 128] GiB); fallback 64GiB
+    test.isEqual(_gib(16),  _eval(spec.onCPU.ram, F, 0, 0))          // floor
+    test.isEqual(_gib(128), _eval(spec.onCPU.ram, F, 100 * _gib(1), 0)) // cap
+    test.isEqual(_gib(64),  f.fallbackOf(spec.onCPU.ram))
+
+    // onGPU.cpu is a fixed core count (CPU-fallback safety on the GPU host).
+    test.isEqual(4, spec.onGPU.cpu)
+
+    // onGPU.ram = clamp(6*size + 2GiB, [4, 64] GiB); fallback 16GiB
+    test.isEqual(_gib(4),  _eval(spec.onGPU.ram, F, 0, 0))          // floor
+    test.isEqual(_gib(64), _eval(spec.onGPU.ram, F, 100 * _gib(1), 0)) // cap
+    test.isEqual(_gib(16), f.fallbackOf(spec.onGPU.ram))
+
+    // onGPU.vram = clamp(8*size + 2GiB, [6, 48] GiB); fallback 16GiB
+    test.isEqual(_gib(6),  _eval(spec.onGPU.vram, F, 0, 0))          // floor
+    test.isEqual(_gib(48), _eval(spec.onGPU.vram, F, 100 * _gib(1), 0)) // cap
+    test.isEqual(_gib(16), f.fallbackOf(spec.onGPU.vram))
+}
+
+// -------- resourcesSeqFeatures: lineCount-driven (clonotype count) ----------
+
+TestResourcesSeqFeatures := func() {
+    b := _mock()
+    rf.resourcesSeqFeatures(b)
+    spec := b.calls.spec
+    F := "input.tsv"
+
+    // onCPU.cpu = clamp(divCeil(lineCount, 250000), [4, 16]); fallback 8
+    test.isEqual(4,  _eval(spec.onCPU.cpu, F, 0, 1000))            // tiny -> floor
+    test.isEqual(16, _eval(spec.onCPU.cpu, F, 0, 1000000000))     // huge -> cap
+    test.isEqual(8,  f.fallbackOf(spec.onCPU.cpu))
+
+    // onCPU.ram = clamp(4096*lineCount + 8GiB, [16, 128] GiB); fallback 64GiB
+    test.isEqual(_gib(16),  _eval(spec.onCPU.ram, F, 0, 1000))     // floor
+    test.isEqual(_gib(128), _eval(spec.onCPU.ram, F, 0, 1000000000)) // cap
+    test.isEqual(_gib(64),  f.fallbackOf(spec.onCPU.ram))
+
+    test.isEqual(4, spec.onGPU.cpu)
+
+    // onGPU.ram = clamp(1024*lineCount + 2GiB, [4, 64] GiB); fallback 16GiB
+    test.isEqual(_gib(4),  _eval(spec.onGPU.ram, F, 0, 1000))      // floor
+    test.isEqual(_gib(64), _eval(spec.onGPU.ram, F, 0, 1000000000)) // cap
+    test.isEqual(_gib(16), f.fallbackOf(spec.onGPU.ram))
+
+    // onGPU.vram = clamp(512*lineCount + 2GiB, [6, 48] GiB); fallback 16GiB
+    test.isEqual(_gib(6),  _eval(spec.onGPU.vram, F, 0, 1000))     // floor
+    test.isEqual(_gib(48), _eval(spec.onGPU.vram, F, 0, 1000000000)) // cap
+    test.isEqual(_gib(16), f.fallbackOf(spec.onGPU.vram))
+}
+
+// -------- apply: direct mode wires literal UI values -------------------------
+
 TestApplyDirectNoGpu := func() {
-    b := _mockBuilder()
+    b := _mock()
     rf.apply(b, { directPerformanceSettings: true, requireGpu: false, mem: 48, cpu: 6 }, "sequence-features")
 
-    test.isEqual("48GiB", b.calls.mem)
-    test.isEqual(6, b.calls.cpu)
-    test.isTrue(is_undefined(b.calls.gpuMemory), "no GPU requested when requireGpu is false")
-    test.isTrue(is_undefined(b.calls.memFormula), "direct mode must not use a RAM formula")
-    test.isTrue(is_undefined(b.calls.cpuFormula), "direct mode must not use a CPU formula")
+    spec := b.calls.spec
+    test.isEqual("48GiB", spec.onCPU.ram)
+    test.isEqual(6, spec.onCPU.cpu)
+    test.isTrue(is_undefined(spec.onGPU), "no GPU requested when requireGpu is false")
+}
+
+// -------- apply: data-driven mode routes by inputMode ------------------------
+
+TestApplyRoutesByInputMode := func() {
+    // embedding -> resourcesEmbeddings: onCPU.ram reacts to SIZE, ignores lineCount.
+    emb := _mock()
+    rf.apply(emb, {}, "embedding")
+    test.isEqual(_gib(128), _eval(emb.calls.spec.onCPU.ram, "input.parquet", 100 * _gib(1), 0)) // size -> cap
+    test.isEqual(_gib(16),  _eval(emb.calls.spec.onCPU.ram, "input.parquet", 0, 1000000000))    // lineCount ignored -> floor
+
+    // sequence-features -> resourcesSeqFeatures: onCPU.ram reacts to LINECOUNT, ignores size.
+    seq := _mock()
+    rf.apply(seq, {}, "sequence-features")
+    test.isEqual(_gib(128), _eval(seq.calls.spec.onCPU.ram, "input.tsv", 0, 1000000000))        // lineCount -> cap
+    test.isEqual(_gib(16),  _eval(seq.calls.spec.onCPU.ram, "input.tsv", 100 * _gib(1), 0))     // size ignored -> floor
 }

@@ -1,59 +1,52 @@
 // Single source of truth for the UMAP exec's resource request.
-// Single source of truth for the UMAP exec's resource request.
 //
 // Resources can be set two ways:
 //   - data-driven (default): RAM / CPU / GPU scale with the input via exec.formula.
 //   - direct: the user typed explicit RAM / CPU / GPU values in the UI.
-// In both, a GPU is requested only when one is available (exec.hasGpu). In direct
-// mode the user additionally chooses whether to ask for a GPU at all.
+// In both, a GPU is requested only when one is available. The data-driven path
+// passes both .resources({ onCPU, onGPU }) blocks — the SDK reads exec.hasGpu at
+// workflow render time and takes the onGPU allocation on a GPU-capable backend,
+// the onCPU one otherwise. In direct mode the user additionally chooses whether
+// to ask for a GPU at all.
 //
-// The UMAP software (software/umap/src/main.py) silently fallsback from cuML/GPU
-// to CPU compute when CUDA is missing or VRAM is short. So theGPU path never asks
-// for a bare host: it requests a floored, data-scaled host RAMplus a fixed core
-// count, enough for a CPU fallback to make progress instead of1crawling on 1 core.
+// The UMAP software (software/umap/src/main.py) silently falls back from cuML/GPU
+// to CPU compute when CUDA is missing or VRAM is short. So the GPU path never asks
+// for a bare host: it requests a floored, data-scaled host RAM plus a fixed core
+// count, enough for a CPU fallback to make progress instead of crawling on 1 core.
 
 exec := import("@platforma-sdk/workflow-tengo:exec")
 f := exec.formula
 
-// GPU host floor (CPU-fallback safety). Lean compared to the full CPU path — the
-// heavy work is meant to run in VRAM — but never a sliver.
-gpuHostCpu := 4
-gpuHostMemMin := f.gib(8)
-gpuHostMemMax := f.gib(32)
-
-// The data signal per input mode: embedding is sized off the parquet byte size;
-// sequence-features off the clonotype count (one TSV line each).
-inputSize := func(inputMode) {
-    return inputMode == "embedding" ? f.size("input") : f.lineCount("input")
+// Embeddings: sized off the parquet byte size (f.size).
+resourcesEmbeddings := func(builder) {
+    size := f.size("input")
+    return builder.resources({
+        onCPU: {
+            cpu: size.per(f.gib(4)).between(4, 16).staticFallback(8),
+            ram: size.times(12).plus(f.gib(8)).between(f.gib(16), f.gib(128)).staticFallback(f.gib(64))
+        },
+        onGPU: {
+            cpu: 4,
+            ram: size.times(6).plus(f.gib(2)).between(f.gib(4), f.gib(64)).staticFallback(f.gib(16)),
+            vram: size.times(8).plus(f.gib(2)).between(f.gib(6), f.gib(48)).staticFallback(f.gib(16))
+        }
+    })
 }
 
-// Per-byte / per-clonotype multiplier for a given mode and resource role.
-perUnit := func(inputMode, embeddingMul, sequenceMul) {
-    return f.mul(inputSize(inputMode), inputMode == "embedding" ? embeddingMul : sequenceMul)
-}
-
-// CPU-path RAM: dense matrix + SVD/UMAP working sets. embedding ~12x parquet size;
-// sequence ~4 KiB per clonotype, over an 8 GiB base. Clamp [16, 128] GiB.
-cpuMem := func(inputMode) {
-    return f.clamp(f.add(f.gib(8), perUnit(inputMode, 12, 4096)), f.gib(16), f.gib(128))
-}
-
-// CPU-path cores: 1 per ~4 GiB parquet (embedding) or per 250k clonotypes
-// (sequence). Clamp [4, 16] — k-mer counting parallelises, SVD/UMAP barely do.
-cpuCores := func(inputMode) {
-    divisor := inputMode == "embedding" ? f.gib(4) : 250000
-    return f.clamp(f.divCeil(inputSize(inputMode), divisor), 4, 16)
-}
-
-// GPU host RAM: lean, but floored so a silent CPU fallback still runs.
-gpuHostMem := func(inputMode) {
-    return f.clamp(f.add(f.gib(2), perUnit(inputMode, 6, 1024)), gpuHostMemMin, gpuHostMemMax)
-}
-// GPU VRAM: holds the dense/sparse matrix plus cuML PCA/SVD + UMAP working sets.
-// embedding ~8x parquet size; sequence ~512 B per clonotype. Clamp [8, 48] GiB.
-gpuVram := func(inputMode) {
-    return f.clamp(f.add(f.gib(2), perUnit(inputMode, 8, 512)),
-        f.gib(8), f.gib(48))
+// Sequence features: sized off the clonotype count (one TSV line each, f.lineCount).
+resourcesSeqFeatures := func(builder) {
+    size := f.lineCount("input")
+    return builder.resources({
+        onCPU: {
+            cpu: size.per(250000).between(4, 16).staticFallback(8),
+            ram: size.times(4096).plus(f.gib(8)).between(f.gib(16), f.gib(128)).staticFallback(f.gib(64))
+        },
+        onGPU: {
+            cpu: 4,
+            ram: size.times(1024).plus(f.gib(2)).between(f.gib(4), f.gib(64)).staticFallback(f.gib(16)),
+            vram: size.times(512).plus(f.gib(2)).between(f.gib(6), f.gib(48)).staticFallback(f.gib(16))
+        }
+    })
 }
 
 // apply(builder, args, inputMode) -> builder with mem / cpu / gpu requested.
@@ -62,32 +55,28 @@ apply := func(builder, args, inputMode) {
     direct := !is_undefined(args.directPerformanceSettings) && args.directPerformanceSettings
 
     if direct {
-        builder = builder.mem(string(args.mem) + "GiB").cpu(args.cpu)
+        ram := string(args.mem) + "GiB"
+        // Direct values are literal; data-driven fallbacks carry a .staticFallback().
         if args.requireGpu && exec.hasGpu {
             gpuMem := is_undefined(args.gpuMemory) ? 16 : args.gpuMemory
-            builder = builder.gpuMemory(string(gpuMem) + "GiB")
+            return builder.resources({
+                onGPU: { cpu: args.cpu, ram: ram, vram: string(gpuMem) + "GiB" }
+            })
         }
-        return builder
+        return builder.resources({ onCPU: { cpu: args.cpu, ram: ram } })
     }
 
-    // Data-driven: always try GPU; exec.hasGpu drops the request on GPU-less backends.
-    // Each formula carries a static fallback for backends that can't evaluate formulas.
-    if exec.hasGpu {
-        return builder.
-            memFormula(gpuHostMem(inputMode), { fallback: "16GiB" }).
-            cpu(gpuHostCpu).
-            gpuFormula(gpuVram(inputMode), { fallback: "16GiB" })
+    if inputMode == "embedding" {
+        builder = resourcesEmbeddings(builder)
+    } else {
+        builder = resourcesSeqFeatures(builder)
     }
-    return builder.
-        memFormula(cpuMem(inputMode), { fallback: "64GiB" }).
-        cpuFormula(cpuCores(inputMode), { fallback: 8 })
+    return builder
 }
 
 export {
     apply: apply,
     // Exported for unit tests (resource-formula.test.tengo).
-    cpuMem: cpuMem,
-    cpuCores: cpuCores,
-    gpuHostMem: gpuHostMem,
-    gpuVram: gpuVram
+    resourcesEmbeddings: resourcesEmbeddings,
+    resourcesSeqFeatures: resourcesSeqFeatures
 }
