@@ -22,7 +22,7 @@ resourcesEmbeddings := func(builder) {
     size := f.size("input")
     return builder.resources({
         onCPU: {
-            cpu: size.per(f.gib(4)).between(4, 16).staticFallback(8),
+            cpu: size.dividedBy(f.gib(4)).between(4, 16).staticFallback(8),
             ram: size.times(12).plus(f.gib(8)).between(f.gib(16), f.gib(128)).staticFallback(f.gib(64))
         },
         onGPU: {
@@ -38,7 +38,7 @@ resourcesSeqFeatures := func(builder) {
     size := f.lineCount("input")
     return builder.resources({
         onCPU: {
-            cpu: size.per(250000).between(4, 16).staticFallback(8),
+            cpu: size.dividedBy(250000).between(4, 16).staticFallback(8),
             ram: size.times(4096).plus(f.gib(8)).between(f.gib(16), f.gib(128)).staticFallback(f.gib(64))
         },
         onGPU: {
@@ -53,14 +53,22 @@ resourcesSeqFeatures := func(builder) {
 // The exec's input file must be added with { tag: "input" } so the formulas resolve.
 apply := func(builder, args, inputMode) {
     direct := !is_undefined(args.directPerformanceSettings) && args.directPerformanceSettings
+    useGPU := !is_undefined(args.requireGpu) && args.requireGpu
 
     if direct {
         ram := string(args.mem) + "GiB"
-        vram := is_undefined(args.gpuMemory) ?  "16GiB": args.gpuMemory + "GiB"
-        return builder.resources({
-            onCPU: {cpu: args.cpu, ram: ram },
-            onGPU: {cpu: args.cpu, ram: ram, vram: vram }
-        })
+
+        if useGPU {
+            vram := is_undefined(args.gpuMemory) ?  "16GiB": string(args.gpuMemory) + "GiB"
+            return builder.resources({
+                onCPU: {cpu: args.cpu, ram: ram },
+                onGPU: {cpu: args.cpu, ram: ram, vram: vram }
+            })
+        } else {
+            return builder.resources({
+                onCPU: {cpu: args.cpu, ram: ram }
+            })
+        }
     }
 
     if inputMode == "embedding" {
