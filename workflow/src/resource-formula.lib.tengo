@@ -56,14 +56,11 @@ apply := func(builder, args, inputMode) {
 
     if direct {
         ram := string(args.mem) + "GiB"
-        // Direct values are literal; data-driven fallbacks carry a .staticFallback().
-        if args.requireGpu && exec.hasGpu {
-            gpuMem := is_undefined(args.gpuMemory) ? 16 : args.gpuMemory
-            return builder.resources({
-                onGPU: { cpu: args.cpu, ram: ram, vram: string(gpuMem) + "GiB" }
-            })
-        }
-        return builder.resources({ onCPU: { cpu: args.cpu, ram: ram } })
+        vram := is_undefined(args.gpuMemory) ?  "16GiB": args.gpuMemory + "GiB"
+        return builder.resources({
+            onCPU: {cpu: args.cpu, ram: ram },
+            onGPU: {cpu: args.cpu, ram: ram, vram: vram }
+        })
     }
 
     if inputMode == "embedding" {
