@@ -39,12 +39,12 @@ TestResourcesEmbeddings := func() {
     spec := b.calls.spec
     F := "input.parquet"
 
-    // onCPU.cpu = clamp(divCeil(size, 4GiB), [4, 16]); fallback 8
+    // onCPU.cpu = ceil(size / 4GiB) bounded to [4, 16]; fallback 8
     test.isEqual(4,  _eval(spec.onCPU.cpu, F, 0, 0))                 // tiny -> floor
     test.isEqual(16, _eval(spec.onCPU.cpu, F, 100 * _gib(1), 0))    // huge -> cap
     test.isEqual(8,  f.fallbackOf(spec.onCPU.cpu))
 
-    // onCPU.ram = clamp(12*size + 8GiB, [16, 128] GiB); fallback 64GiB
+    // onCPU.ram = 12*size + 8GiB bounded to [16, 128] GiB; fallback 64GiB
     test.isEqual(_gib(16),  _eval(spec.onCPU.ram, F, 0, 0))          // floor
     test.isEqual(_gib(128), _eval(spec.onCPU.ram, F, 100 * _gib(1), 0)) // cap
     test.isEqual(_gib(64),  f.fallbackOf(spec.onCPU.ram))
@@ -52,12 +52,12 @@ TestResourcesEmbeddings := func() {
     // onGPU.cpu is a fixed core count (CPU-fallback safety on the GPU host).
     test.isEqual(4, spec.onGPU.cpu)
 
-    // onGPU.ram = clamp(6*size + 2GiB, [4, 64] GiB); fallback 16GiB
+    // onGPU.ram = 6*size + 2GiB bounded to [4, 64] GiB; fallback 16GiB
     test.isEqual(_gib(4),  _eval(spec.onGPU.ram, F, 0, 0))          // floor
     test.isEqual(_gib(64), _eval(spec.onGPU.ram, F, 100 * _gib(1), 0)) // cap
     test.isEqual(_gib(16), f.fallbackOf(spec.onGPU.ram))
 
-    // onGPU.vram = clamp(8*size + 2GiB, [6, 48] GiB); fallback 16GiB
+    // onGPU.vram = 8*size + 2GiB bounded to [6, 48] GiB; fallback 16GiB
     test.isEqual(_gib(6),  _eval(spec.onGPU.vram, F, 0, 0))          // floor
     test.isEqual(_gib(48), _eval(spec.onGPU.vram, F, 100 * _gib(1), 0)) // cap
     test.isEqual(_gib(16), f.fallbackOf(spec.onGPU.vram))
@@ -71,24 +71,24 @@ TestResourcesSeqFeatures := func() {
     spec := b.calls.spec
     F := "input.tsv"
 
-    // onCPU.cpu = clamp(divCeil(lineCount, 250000), [4, 16]); fallback 8
+    // onCPU.cpu = ceil(lineCount / 250000) bounded to [4, 16]; fallback 8
     test.isEqual(4,  _eval(spec.onCPU.cpu, F, 0, 1000))            // tiny -> floor
     test.isEqual(16, _eval(spec.onCPU.cpu, F, 0, 1000000000))     // huge -> cap
     test.isEqual(8,  f.fallbackOf(spec.onCPU.cpu))
 
-    // onCPU.ram = clamp(4096*lineCount + 8GiB, [16, 128] GiB); fallback 64GiB
+    // onCPU.ram = 4096*lineCount + 8GiB bounded to [16, 128] GiB; fallback 64GiB
     test.isEqual(_gib(16),  _eval(spec.onCPU.ram, F, 0, 1000))     // floor
     test.isEqual(_gib(128), _eval(spec.onCPU.ram, F, 0, 1000000000)) // cap
     test.isEqual(_gib(64),  f.fallbackOf(spec.onCPU.ram))
 
     test.isEqual(4, spec.onGPU.cpu)
 
-    // onGPU.ram = clamp(1024*lineCount + 2GiB, [4, 64] GiB); fallback 16GiB
+    // onGPU.ram = 1024*lineCount + 2GiB bounded to [4, 64] GiB; fallback 16GiB
     test.isEqual(_gib(4),  _eval(spec.onGPU.ram, F, 0, 1000))      // floor
     test.isEqual(_gib(64), _eval(spec.onGPU.ram, F, 0, 1000000000)) // cap
     test.isEqual(_gib(16), f.fallbackOf(spec.onGPU.ram))
 
-    // onGPU.vram = clamp(512*lineCount + 2GiB, [6, 48] GiB); fallback 16GiB
+    // onGPU.vram = 512*lineCount + 2GiB bounded to [6, 48] GiB; fallback 16GiB
     test.isEqual(_gib(6),  _eval(spec.onGPU.vram, F, 0, 1000))     // floor
     test.isEqual(_gib(48), _eval(spec.onGPU.vram, F, 0, 1000000000)) // cap
     test.isEqual(_gib(16), f.fallbackOf(spec.onGPU.vram))
