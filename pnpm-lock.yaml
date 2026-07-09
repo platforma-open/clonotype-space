@@ -49,8 +49,8 @@ catalogs:
       specifier: 1.79.15
       version: 1.79.15
     '@platforma-sdk/workflow-tengo':
-      specifier: 6.6.3
-      version: 6.6.3
+      specifier: 6.7.0
+      version: 6.7.0
     '@vueuse/core':
       specifier: ^13.3.0
       version: 13.9.0
@@ -240,7 +240,7 @@ importers:
         version: link:../software/umap
       '@platforma-sdk/workflow-tengo':
         specifier: 'catalog:'
-        version: 6.6.3
+        version: 6.7.0
     devDependencies:
       '@platforma-sdk/tengo-builder':
         specifier: 'catalog:'
@@ -1174,6 +1174,9 @@ packages:
   '@milaboratories/pframes-rs-wasip2@1.1.50':
     resolution: {integrity: sha512-FHv6Cksyl9q9plIhRUzNP0cQ03aZVltNh+haZ5KGVNHh9e5PgP9ndnTP06bQ1JRyQ/6Thf1NF5yw1lBXp6J+uw==}
 
+  '@milaboratories/pframes-rs-wasip2@1.1.52':
+    resolution: {integrity: sha512-0rb0We6Q/aqrHJ062dayvLb4RExODZdqfsVWdzeHq23alY5TjJRMWsO9aKQpPnOuUKjAimdjlp+Ldq9TVhbEtg==}
+
   '@milaboratories/pframes-rs-wasm@1.1.50':
     resolution: {integrity: sha512-D7YvFltjAk+OLCC/5/U741Hipxof4v/t0cJbk+y38MJjx6PyGQhAyVP/J4XfbJgdFdTGdDidRCNGYLt/Jn8l3w==}
     peerDependencies:
@@ -1595,8 +1598,14 @@ packages:
   '@platforma-open/milaboratories.software-ptabler@2.1.2':
     resolution: {integrity: sha512-pCPA9oa4MPZ8mw7tJRjp4Zy9e/xJL9+tWKlSVXd+PbSkAqZoPTirf1izWV/NEZhhM7w8przq4jGhbqj6ukkCRQ==}
 
+  '@platforma-open/milaboratories.software-ptabler@2.1.4':
+    resolution: {integrity: sha512-hLGDR7xVKoKj+4IM+fiWmJjFvYCZ2JmDQ7/Z99nq1zglAJJ1dqqVrtZ2TJ67HNyORpe1CrkRXvP9kNc4JxBUgA==}
+
   '@platforma-open/milaboratories.software-ptexter@1.2.2':
     resolution: {integrity: sha512-I08YpKQ4+esLrfpVra5UJ+bznI9Zzba6OW0rKK407a1EUmanvYMVrCbM9gqnm6CHbv2vQxNGSaO8p1LoBh+9gA==}
+
+  '@platforma-open/milaboratories.software-ptexter@1.2.3':
+    resolution: {integrity: sha512-5wwzvPko/tjkm6EnirsnjB+MO5mF//tgJplI+jPh3bcSHpEdHF+B9xg+S1owAnekqbimMrFZWqHSVY9ZmIHOjw==}
 
   '@platforma-open/milaboratories.software-small-binaries.hello-world-py@1.0.10':
     resolution: {integrity: sha512-16BGRLIrsVW+YIaXwWLX6Nbm80PS5mQJEclHhjNbRrRTLHPaKI4RygZfBC0lLNzvHBiTXU4Qkh1+WmdovkshDg==}
@@ -1644,6 +1653,9 @@ packages:
 
   '@platforma-sdk/workflow-tengo@6.6.3':
     resolution: {integrity: sha512-2H83hEd+t8pIcSpz0anmWb0wesEcoXCYl9HSOcfQL9b0ro6EDf+PwyafXtmbXl2kMtkpccigbhDGZdDhoMpr7w==}
+
+  '@platforma-sdk/workflow-tengo@6.7.0':
+    resolution: {integrity: sha512-hotcGbt42gbMRpNp4PEtE8TBLAQXn+V2LM1SCyY5cnc+tWXxUwhgQnfNsg/xOvbu2qxUZhVrGisvb7Ruj+L2IA==}
 
   '@protobuf-ts/grpc-transport@2.11.1':
     resolution: {integrity: sha512-l6wrcFffY+tuNnuyrNCkRM8hDIsAZVLA8Mn7PKdVyYxITosYh60qW663p9kL6TWXYuDCL3oxH8ih3vLKTDyhtg==}
@@ -7779,6 +7791,8 @@ snapshots:
 
   '@milaboratories/pframes-rs-wasip2@1.1.50': {}
 
+  '@milaboratories/pframes-rs-wasip2@1.1.52': {}
+
   '@milaboratories/pframes-rs-wasm@1.1.50(@bytecodealliance/preview2-shim@0.17.8)(@milaboratories/pl-model-common@1.46.2)(@milaboratories/pl-model-middle-layer@1.30.7)':
     dependencies:
       '@bytecodealliance/preview2-shim': 0.17.8
@@ -8426,7 +8440,11 @@ snapshots:
 
   '@platforma-open/milaboratories.software-ptabler@2.1.2': {}
 
+  '@platforma-open/milaboratories.software-ptabler@2.1.4': {}
+
   '@platforma-open/milaboratories.software-ptexter@1.2.2': {}
+
+  '@platforma-open/milaboratories.software-ptexter@1.2.3': {}
 
   '@platforma-open/milaboratories.software-small-binaries.hello-world-py@1.0.10': {}
 
@@ -8586,6 +8604,14 @@ snapshots:
       '@milaboratories/software-pframes-conv': 2.2.9
       '@platforma-open/milaboratories.software-ptabler': 2.1.2
       '@platforma-open/milaboratories.software-ptexter': 1.2.2
+      '@platforma-open/milaboratories.software-small-binaries': 2.1.1
+
+  '@platforma-sdk/workflow-tengo@6.7.0':
+    dependencies:
+      '@milaboratories/pframes-rs-wasip2': 1.1.52
+      '@milaboratories/software-pframes-conv': 2.2.9
+      '@platforma-open/milaboratories.software-ptabler': 2.1.4
+      '@platforma-open/milaboratories.software-ptexter': 1.2.3
       '@platforma-open/milaboratories.software-small-binaries': 2.1.1
 
   '@protobuf-ts/grpc-transport@2.11.1(@grpc/grpc-js@1.13.4)':
