@@ -1,0 +1,123 @@
+test := import("@platforma-sdk/workflow-tengo:test")
+exec := import("@platforma-sdk/workflow-tengo:exec")
+rf := import(":resource-formula")
+
+f := exec.formula
+
+_gib := func(n) { return n * 1073741824 }
+
+// Evaluate a resource formula (a fluent exec.formula node) against fake metric
+// values, mirroring what the exec builder does at run time: bind tag "input" to a
+// file, resolve metric -> files, then evaluate. sizeBytes drives f.size();
+// lineCount drives f.lineCount(). fileName only needs a line-oriented extension
+// for lineCount inputs (size is always compatible).
+_eval := func(node, fileName, sizeBytes, lineCount) {
+    resolved := f.resolveAst(node, { "input": [fileName] }, [fileName])
+    resolver := {
+        size:      func(files) { return sizeBytes },
+        lineCount: func(files) { return lineCount }
+    }
+    return f.evaluateResource(resolved, resolver, "test")
+}
+
+// Minimal builder stub: records the single resources({...}) spec the function
+// under test builds, so assertions run without a live builder / backend.
+_mock := func() {
+    self := undefined
+    self = {
+        calls: {},
+        resources: func(spec) { self.calls.spec = spec; return self }
+    }
+    return self
+}
+
+// -------- resourcesEmbeddings: size-driven (parquet byte size) --------------
+
+TestResourcesEmbeddings := func() {
+    b := _mock()
+    rf.resourcesEmbeddings(b)
+    spec := b.calls.spec
+    F := "input.parquet"
+
+    // onCPU.cpu = ceil(size / 4GiB) bounded to [4, 16]; fallback 8
+    test.isEqual(4,  _eval(spec.onCPU.cpu, F, 0, 0))                 // tiny -> floor
+    test.isEqual(16, _eval(spec.onCPU.cpu, F, 100 * _gib(1), 0))    // huge -> cap
+    test.isEqual(8,  f.fallbackOf(spec.onCPU.cpu))
+
+    // onCPU.ram = 12*size + 8GiB bounded to [16, 128] GiB; fallback 64GiB
+    test.isEqual(_gib(16),  _eval(spec.onCPU.ram, F, 0, 0))          // floor
+    test.isEqual(_gib(128), _eval(spec.onCPU.ram, F, 100 * _gib(1), 0)) // cap
+    test.isEqual(_gib(64),  f.fallbackOf(spec.onCPU.ram))
+
+    // onGPU.cpu is a fixed core count (CPU-fallback safety on the GPU host).
+    test.isEqual(4, spec.onGPU.cpu)
+
+    // onGPU.ram = 6*size + 2GiB bounded to [4, 64] GiB; fallback 16GiB
+    test.isEqual(_gib(4),  _eval(spec.onGPU.ram, F, 0, 0))          // floor
+    test.isEqual(_gib(64), _eval(spec.onGPU.ram, F, 100 * _gib(1), 0)) // cap
+    test.isEqual(_gib(16), f.fallbackOf(spec.onGPU.ram))
+
+    // onGPU.vram = 8*size + 2GiB bounded to [6, 48] GiB; fallback 16GiB
+    test.isEqual(_gib(6),  _eval(spec.onGPU.vram, F, 0, 0))          // floor
+    test.isEqual(_gib(48), _eval(spec.onGPU.vram, F, 100 * _gib(1), 0)) // cap
+    test.isEqual(_gib(16), f.fallbackOf(spec.onGPU.vram))
+}
+
+// -------- resourcesSeqFeatures: lineCount-driven (clonotype count) ----------
+
+TestResourcesSeqFeatures := func() {
+    b := _mock()
+    rf.resourcesSeqFeatures(b)
+    spec := b.calls.spec
+    F := "input.tsv"
+
+    // onCPU.cpu = ceil(lineCount / 250000) bounded to [4, 16]; fallback 8
+    test.isEqual(4,  _eval(spec.onCPU.cpu, F, 0, 1000))            // tiny -> floor
+    test.isEqual(16, _eval(spec.onCPU.cpu, F, 0, 1000000000))     // huge -> cap
+    test.isEqual(8,  f.fallbackOf(spec.onCPU.cpu))
+
+    // onCPU.ram = 4096*lineCount + 8GiB bounded to [16, 128] GiB; fallback 64GiB
+    test.isEqual(_gib(16),  _eval(spec.onCPU.ram, F, 0, 1000))     // floor
+    test.isEqual(_gib(128), _eval(spec.onCPU.ram, F, 0, 1000000000)) // cap
+    test.isEqual(_gib(64),  f.fallbackOf(spec.onCPU.ram))
+
+    test.isEqual(4, spec.onGPU.cpu)
+
+    // onGPU.ram = 1024*lineCount + 2GiB bounded to [4, 64] GiB; fallback 16GiB
+    test.isEqual(_gib(4),  _eval(spec.onGPU.ram, F, 0, 1000))      // floor
+    test.isEqual(_gib(64), _eval(spec.onGPU.ram, F, 0, 1000000000)) // cap
+    test.isEqual(_gib(16), f.fallbackOf(spec.onGPU.ram))
+
+    // onGPU.vram = 512*lineCount + 2GiB bounded to [6, 48] GiB; fallback 16GiB
+    test.isEqual(_gib(6),  _eval(spec.onGPU.vram, F, 0, 1000))     // floor
+    test.isEqual(_gib(48), _eval(spec.onGPU.vram, F, 0, 1000000000)) // cap
+    test.isEqual(_gib(16), f.fallbackOf(spec.onGPU.vram))
+}
+
+// -------- apply: direct mode wires literal UI values -------------------------
+
+TestApplyDirectNoGpu := func() {
+    b := _mock()
+    rf.apply(b, { directPerformanceSettings: true, requireGpu: false, mem: 48, cpu: 6 }, "sequence-features")
+
+    spec := b.calls.spec
+    test.isEqual("48GiB", spec.onCPU.ram)
+    test.isEqual(6, spec.onCPU.cpu)
+    test.isTrue(is_undefined(spec.onGPU), "no GPU requested when requireGpu is false")
+}
+
+// -------- apply: data-driven mode routes by inputMode ------------------------
+
+TestApplyRoutesByInputMode := func() {
+    // embedding -> resourcesEmbeddings: onCPU.ram reacts to SIZE, ignores lineCount.
+    emb := _mock()
+    rf.apply(emb, {}, "embedding")
+    test.isEqual(_gib(128), _eval(emb.calls.spec.onCPU.ram, "input.parquet", 100 * _gib(1), 0)) // size -> cap
+    test.isEqual(_gib(16),  _eval(emb.calls.spec.onCPU.ram, "input.parquet", 0, 1000000000))    // lineCount ignored -> floor
+
+    // sequence-features -> resourcesSeqFeatures: onCPU.ram reacts to LINECOUNT, ignores size.
+    seq := _mock()
+    rf.apply(seq, {}, "sequence-features")
+    test.isEqual(_gib(128), _eval(seq.calls.spec.onCPU.ram, "input.tsv", 0, 1000000000))        // lineCount -> cap
+    test.isEqual(_gib(16),  _eval(seq.calls.spec.onCPU.ram, "input.tsv", 100 * _gib(1), 0))     // size ignored -> floor
+}

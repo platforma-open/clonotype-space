@@ -69,7 +69,10 @@ export const platforma = BlockModelV3.create(blockDataModel)
   .args<BlockArgs>((data) => {
     if (data.inputAnchor === undefined) throw new Error("Input dataset is required");
     if (data.umap_neighbors === undefined) throw new Error("UMAP neighbors is required");
+    if (data.umap_neighbors < 2) throw new Error("UMAP requires at least 2 neighbors");
     if (data.umap_min_dist === undefined) throw new Error("UMAP min distance is required");
+    if (data.umap_min_dist < 0 || data.umap_min_dist > 1)
+      throw new Error("UMAP min distance must be between 0 and 1");
     if (data.cpu === undefined) throw new Error("CPU is required");
     if (data.mem === undefined) throw new Error("Memory is required");
     data.requireGpu = data.requireGpu ?? true;
@@ -83,6 +86,7 @@ export const platforma = BlockModelV3.create(blockDataModel)
       inputMode: data.inputMode,
       umap_neighbors: data.umap_neighbors,
       umap_min_dist: data.umap_min_dist,
+      directPerformanceSettings: data.directPerformanceSettings,
       cpu: data.cpu,
       mem: data.mem,
       requireGpu: data.requireGpu,

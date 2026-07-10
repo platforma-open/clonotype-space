@@ -427,7 +427,12 @@ watch(
               :step="0.1"
               required
               :validate="
-                (value) => (value === undefined ? 'Minimum Distance is required' : undefined)
+                (value) => {
+                  if (value === undefined) return 'Minimum Distance is required';
+                  if (value < 0) return 'Minimum Distance must be non-negative';
+                  if (value > 1) return 'Minimum Distance must be less than or equal to 1.0';
+                  return undefined;
+                }
               "
               :style="{ flex: 1 }"
             >
@@ -448,6 +453,19 @@ watch(
         </PlAccordionSection>
 
         <PlAccordionSection label="Performance Settings" :style="{ width: '320px' }">
+          <PlCheckbox v-model="app.model.data.directPerformanceSettings">
+            Set performance settings directly
+            <template #tooltip>
+              <div>
+                <strong>Direct performance settings</strong><br />
+                When unchecked (default), RAM and CPU are derived from the input file size via a
+                built-in resource formula — bigger inputs get more resources automatically. The
+                fields below are ignored.<br /><br />
+                Check this box to override the formula and set Memory, CPU, GPU requirement, and GPU
+                memory by hand.
+              </div>
+            </template>
+          </PlCheckbox>
           <div :style="{ display: 'flex', gap: '8px', width: '320px' }">
             <PlNumberField
               v-model="app.model.data.mem"
@@ -457,6 +475,7 @@ watch(
               :max="1024"
               :step="1"
               required
+              :disabled="!app.model.data.directPerformanceSettings"
               :validate="(value) => (value === undefined ? 'Memory is required' : undefined)"
               :style="{ flex: 1 }"
             >
@@ -489,6 +508,7 @@ watch(
               :max="128"
               :step="1"
               required
+              :disabled="!app.model.data.directPerformanceSettings"
               :validate="(value) => (value === undefined ? 'CPU is required' : undefined)"
               :style="{ flex: 1 }"
             >
@@ -506,7 +526,12 @@ watch(
               </template>
             </PlNumberField>
           </div>
-          <PlCheckbox v-model="app.model.data.requireGpu"> Require run on GPU </PlCheckbox>
+          <PlCheckbox
+            v-model="app.model.data.requireGpu"
+            :disabled="!app.model.data.directPerformanceSettings"
+          >
+            Require run on GPU
+          </PlCheckbox>
           <PlNumberField
             v-model="app.model.data.gpuMemory"
             label="GPU memory (GB)"
@@ -514,7 +539,7 @@ watch(
             :min="1"
             :max="64"
             :step="1"
-            :disabled="!app.model.data.requireGpu"
+            :disabled="!app.model.data.directPerformanceSettings || !app.model.data.requireGpu"
             :style="{ flex: 1 }"
           >
             <template #tooltip>

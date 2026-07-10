@@ -1,0 +1,87 @@
+// Single source of truth for the UMAP exec's resource request.
+//
+// Resources can be set two ways:
+//   - data-driven (default): RAM / CPU / GPU scale with the input via exec.formula.
+//   - direct: the user typed explicit RAM / CPU / GPU values in the UI.
+// In both, a GPU is requested only when one is available. The data-driven path
+// passes both .resources({ onCPU, onGPU }) blocks — the SDK reads exec.hasGpu at
+// workflow render time and takes the onGPU allocation on a GPU-capable backend,
+// the onCPU one otherwise. In direct mode the user additionally chooses whether
+// to ask for a GPU at all.
+//
+// The UMAP software (software/umap/src/main.py) silently falls back from cuML/GPU
+// to CPU compute when CUDA is missing or VRAM is short. So the GPU path never asks
+// for a bare host: it requests a floored, data-scaled host RAM plus a fixed core
+// count, enough for a CPU fallback to make progress instead of crawling on 1 core.
+
+exec := import("@platforma-sdk/workflow-tengo:exec")
+f := exec.formula
+
+// Embeddings: sized off the parquet byte size (f.size).
+resourcesEmbeddings := func(builder) {
+    size := f.size("input")
+    return builder.resources({
+        onCPU: {
+            cpu: size.dividedBy(f.gib(4)).between(4, 16).staticFallback(8),
+            ram: size.times(12).plus(f.gib(8)).between(f.gib(16), f.gib(128)).staticFallback(f.gib(64))
+        },
+        onGPU: {
+            cpu: 4,
+            ram: size.times(6).plus(f.gib(2)).between(f.gib(4), f.gib(64)).staticFallback(f.gib(16)),
+            vram: size.times(8).plus(f.gib(2)).between(f.gib(6), f.gib(48)).staticFallback(f.gib(16))
+        }
+    })
+}
+
+// Sequence features: sized off the clonotype count (one TSV line each, f.lineCount).
+resourcesSeqFeatures := func(builder) {
+    size := f.lineCount("input")
+    return builder.resources({
+        onCPU: {
+            cpu: size.dividedBy(250000).between(4, 16).staticFallback(8),
+            ram: size.times(4096).plus(f.gib(8)).between(f.gib(16), f.gib(128)).staticFallback(f.gib(64))
+        },
+        onGPU: {
+            cpu: 4,
+            ram: size.times(1024).plus(f.gib(2)).between(f.gib(4), f.gib(64)).staticFallback(f.gib(16)),
+            vram: size.times(512).plus(f.gib(2)).between(f.gib(6), f.gib(48)).staticFallback(f.gib(16))
+        }
+    })
+}
+
+// apply(builder, args, inputMode) -> builder with mem / cpu / gpu requested.
+// The exec's input file must be added with { tag: "input" } so the formulas resolve.
+apply := func(builder, args, inputMode) {
+    direct := !is_undefined(args.directPerformanceSettings) && args.directPerformanceSettings
+    useGPU := !is_undefined(args.requireGpu) && args.requireGpu
+
+    if direct {
+        ram := string(args.mem) + "GiB"
+
+        if useGPU {
+            vram := is_undefined(args.gpuMemory) ?  "16GiB": string(args.gpuMemory) + "GiB"
+            return builder.resources({
+                onCPU: {cpu: args.cpu, ram: ram },
+                onGPU: {cpu: args.cpu, ram: ram, vram: vram }
+            })
+        } else {
+            return builder.resources({
+                onCPU: {cpu: args.cpu, ram: ram }
+            })
+        }
+    }
+
+    if inputMode == "embedding" {
+        builder = resourcesEmbeddings(builder)
+    } else {
+        builder = resourcesSeqFeatures(builder)
+    }
+    return builder
+}
+
+export {
+    apply: apply,
+    // Exported for unit tests (resource-formula.test.tengo).
+    resourcesEmbeddings: resourcesEmbeddings,
+    resourcesSeqFeatures: resourcesSeqFeatures
+}
