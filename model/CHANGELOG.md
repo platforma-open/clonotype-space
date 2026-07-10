@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.model
 
+## 3.4.0
+
+### Minor Changes
+
+- 490ab69: Resources request with formulas + minor UI validations
+
 ## 3.3.4
 
 ### Patch Changes

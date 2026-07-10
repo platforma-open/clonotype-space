@@ -1,6 +1,6 @@
 {
   "name": "@platforma-open/milaboratories.clonotype-space.workflow",
-  "version": "3.4.4",
+  "version": "3.5.0",
   "private": true,
   "description": "Block Workflow",
   "type": "module",
