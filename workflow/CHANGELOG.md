@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.workflow
 
+## 3.5.1
+
+### Patch Changes
+
+- 852fb98: Just mock change to push new version
+
 ## 3.5.0
 
 ### Minor Changes

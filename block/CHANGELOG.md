@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space
 
+## 3.4.5
+
+### Patch Changes
+
+- 852fb98: Just mock change to push new version
+
 ## 3.4.4
 
 ### Patch Changes
