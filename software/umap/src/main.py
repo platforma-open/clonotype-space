@@ -745,6 +745,11 @@ def parse_args():
                         help='Embedding-dimension column name in the embedding matrix (default: embeddingDim).')
     parser.add_argument('--value-col', default='value',
                         help='Embedding-value column name in the embedding matrix (default: value).')
+    parser.add_argument('--dims', default=None,
+                        help='Embedding vector length D (--encoding embedding), from the input column\'s '
+                             'pl7.app/embedding/length annotation. Lets the streaming loader resolve D '
+                             'without a scan; when omitted D is inferred as max(embeddingDim)+1 in the '
+                             'first row group.')
     parser.add_argument('--embedding-model', default=None,
                         help='Embedding model identifier, logged to the processing log for provenance '
                              '(--encoding embedding). Stamped on the output column domain by the workflow.')
@@ -1046,56 +1051,98 @@ def run_cpu_pipeline(args, df_valid, sequences_all, umap_model):
 # ============================================================================
 #
 # UMAP on learned per-clonotype embedding vectors. Order is load-bearing:
-#   load matrix → vector-dedup → centered PCA-95% → L2-normalize → Euclidean UMAP.
+#   centered PCA-95% → L2-normalize → Euclidean UMAP.
 # Centered PCA removes ESM-2's large non-discriminative shared mean, so the post-PCA
 # L2-normalize + Euclidean (≡ cosine ranking) then measures the mean-removed residuals.
-# Reuses create_umap_model (CPU/GPU backends) but NOT run_cpu/gpu_pipeline — the matrix is already
-# materialized, so there is no per-chunk feature recompute.
+#
+# Memory handling for large inputs: the full N x D matrix is NEVER materialized. The CPU path
+# STREAMS the long-format parquet twice — once to collect a bounded, seeded fit sample
+# (~max_sequences x D), once to project every clonotype through the fitted PCA/UMAP in batches — so
+# peak memory is bounded by the fit sample, independent of N. The GPU path (G2) streams the load
+# straight into a device array (host stays bounded) and keeps cuML's fit-on-all behaviour unchanged.
+# Exact-duplicate vectors are NOT de-duplicated before the fit to avoid memory scaling.
 
-def load_embedding_matrix(path, key_col, dim_col, value_col):
-    """Read the long-format embedding matrix (parquet) → (X float32, keys object array).
+# Fixed, data-derived batch size for the streaming reads: 4M long-format rows per pyarrow batch.
+# Deliberately NOT scaled by the allocated memory — a fixed batch keeps assembly deterministic and the
+# per-batch footprint constant regardless of the RAM the backend granted.
+EMBEDDING_STREAM_BATCH_ROWS = 4_000_000
 
-    The parquet has one row per (clonotype, embeddingDim). Rather than sorting the whole N*D-row frame
-    (a full sorted copy — the dominant memory cost at scale), the matrix is built by SCATTER: factorize
-    the clonotype key to an integer code, then place each value at X[code, dim]. This is order-
-    independent (dim positions the column, code positions the row) and avoids the sort entirely. Casting
-    the key to Categorical keeps only the unique keys + per-row codes instead of N*D expanded strings.
 
-    Keys come back in physical-code (first-appearance) order; row order does not matter downstream
-    (dedup re-sorts; the output pframe is keyed by clonotype value, not row position). Kept float32.
+class _EmptyEmbeddingResult(Exception):
+    """Signals that an embedding path already wrote the empty output files and processing should
+    unwind to the caller (empty / too-few-vector inputs)."""
 
-    Completeness (the ragged-matrix check, R-equivalent): a full, duplicate-free fill requires BOTH
-    `len(vals) == n*D` (no extra/duplicate rows) AND no unfilled cell after the scatter (no missing dim).
-    embeddingDim is the producer's 0..D-1 index, used directly as the column index; D is inferred as
-    max(dim)+1."""
-    df = pl.read_parquet(path, columns=[key_col, dim_col, value_col])
-    if df.height == 0:
-        return np.empty((0, 0), dtype=np.float32), np.array([], dtype=object)
 
-    cat = df.get_column(key_col).cast(pl.Categorical)
-    keys = cat.cat.get_categories()                 # unique clonotype keys, in physical-code order
-    n = keys.len()
-    codes = cat.to_physical().to_numpy()            # per-row clonotype index 0..n-1 (aligns with `keys`)
-    dims = df.get_column(dim_col).to_numpy()         # per-row embeddingDim index
-    vals = df.get_column(value_col).cast(pl.Float32).to_numpy()
-    del df, cat
+def _open_matrix(path, key_col, dim_col, value_col, dims):
+    """Open the long-format parquet and resolve D without scanning the file. Validates the three
+    columns exist; D comes from --dims (the pl7.app/embedding/length annotation) when given, else
+    max(embeddingDim)+1 in the first row group. Returns (ParquetFile, D)."""
+    import pyarrow.parquet as pq
+    pf = pq.ParquetFile(path)
+    names = list(pf.schema_arrow.names)
+    for role, col in [("--key-col", key_col), ("--dim-col", dim_col), ("--value-col", value_col)]:
+        if col not in names:
+            raise ValueError(f"{role} {col!r} is not a column in {path}; available columns: {names}")
+    if pf.metadata.num_rows == 0:            # empty input -> D irrelevant (caller writes empty output)
+        return pf, int(dims) if dims else 0
+    if dims:
+        return pf, int(dims)
+    D = int(pl.from_arrow(pf.read_row_group(0, columns=[dim_col])).get_column(dim_col).max()) + 1
+    return pf, D
 
-    if dims.min() < 0:
-        raise ValueError(f"embeddingDim must be a 0-based index; got a negative value {int(dims.min())}.")
-    D = int(dims.max()) + 1
 
-    if vals.shape[0] != n * D:
-        raise ValueError(
-            f"Ragged embedding matrix: {vals.shape[0]} rows != n*D ({n}*{D}) — a clonotype has extra "
-            f"or duplicate (clonotype, dim) rows.")
+def _clonotype_count(pf, D):
+    """Clonotype count = long rows / D, taken from the parquet footer (no scan)."""
+    return 0 if D <= 0 else pf.metadata.num_rows // D
 
-    X = np.full((n, D), np.nan, dtype=np.float32)
-    X[codes, dims] = vals                            # scatter: row = clonotype, col = embeddingDim
-    if np.isnan(X).any():
-        raise ValueError(
-            "Ragged embedding matrix: a (clonotype, dim) cell is missing — a clonotype has a partial "
-            "embedding-dimension set.")
-    return X, keys.to_numpy().astype(object)
+
+def _stream_clonotypes(pf, key_col, dim_col, value_col, D, batch_rows=EMBEDDING_STREAM_BATCH_ROWS):
+    """Yield (keys, matrix) blocks of whole clonotypes, assembled from contiguous long-format rows and
+    holding back the trailing clonotype that may continue in the next batch. Memory bounded to ~one
+    batch. Copied from embedding-clustering; keep the guards in sync."""
+    def build(ks, ds, vs):
+        # np.unique -> distinct keys `uk` (sorted) + `inv` (per-row index into uk). Scattering
+        # mat[inv, ds] = vs drops each value into its (clonotype, embeddingDim) cell, so row order
+        # within the block does not matter.
+        uk, inv = np.unique(ks, return_inverse=True)
+        # Row-count guard: each clonotype must have exactly D contiguous rows.
+        if (np.bincount(inv) != D).any():
+            raise ValueError("a clonotype did not have exactly D contiguous rows -- the embedding "
+                             "matrix is not clonotype-blocked (the streaming loader needs contiguous rows).")
+        # Dimension-range guard: embeddingDim must be a 0..D-1 index.
+        if ds.min() < 0 or ds.max() >= D:
+            raise ValueError(f"embeddingDim out of range [0, {D}); saw {int(ds.min())}..{int(ds.max())} "
+                             f"-- pass the correct --dims (the pl7.app/embedding/length annotation).")
+        # Completeness: NaN-fill, scatter, require no cell left unset -- catches a duplicated dim (hence
+        # a missing dim -> an unfilled hole) and any NaN in the value column.
+        mat = np.full((uk.shape[0], D), np.nan, dtype=np.float32)
+        mat[inv, ds] = vs
+        if np.isnan(mat).any():
+            raise ValueError("ragged embedding matrix: a (clonotype, dim) cell is missing, duplicated, "
+                             "or NaN -- a clonotype has a partial/invalid embedding-dimension set.")
+        return uk, mat
+
+    leftover = None
+    for b in pf.iter_batches(columns=[key_col, dim_col, value_col], batch_size=batch_rows):
+        t = pl.from_arrow(b)
+        k = t.get_column(key_col).to_numpy().astype(object)
+        d = t.get_column(dim_col).to_numpy()
+        v = t.get_column(value_col).cast(pl.Float32).to_numpy()
+        # A clonotype's D rows can straddle a batch boundary, so prepend the previous batch's
+        # carried-over trailing clonotype before assembling this batch.
+        if leftover is not None:
+            k = np.concatenate([leftover[0], k])
+            d = np.concatenate([leftover[1], d])
+            v = np.concatenate([leftover[2], v])
+        # Hold back the LAST key's rows (they may continue in the next batch); assemble + emit the rest.
+        tail = k == k[-1]
+        leftover = (k[tail], d[tail], v[tail])
+        keep = ~tail
+        if keep.any():
+            yield build(k[keep], d[keep], v[keep])
+    # The final trailing clonotype has no continuation -- emit it.
+    if leftover is not None:
+        yield build(*leftover)
 
 
 def l2_normalize(X, eps=1e-12):
@@ -1115,118 +1162,183 @@ def _select_k_for_variance(explained_variance_ratio, target=SVD_TARGET_VARIANCE)
     return len(explained_variance_ratio)
 
 
-def _pca_reduce_sklearn(X_fit, X_all, ncomp):
-    """Centered PCA on CPU (sklearn, svd_solver='full', deterministic). Fit on X_fit, transform X_all,
-    slice to the 95%-variance k. Returns (Xr float32, k)."""
+def _fit_pca_cpu(X_fit):
+    """Centered PCA (sklearn, svd_solver='full', deterministic) fit on the fit sample. Returns
+    (pca, k) with k the 95%-variance component count (cap SVD_MAX_COMPONENTS); any batch is projected
+    as pca.transform(batch)[:, :k]. Returns (None, D) for a sample too small to fit (guarded upstream —
+    the caller writes an empty output before this is reached in practice)."""
     from sklearn.decomposition import PCA
-    print("Using CPU-based centered PCA (scikit-learn, svd_solver='full')...")
+    n_fit, D = X_fit.shape
+    ncomp = min(SVD_MAX_COMPONENTS, n_fit - 1, D)
+    if ncomp < 1:
+        return None, D
+    print("Fitting centered PCA (scikit-learn, svd_solver='full') on the fit sample...")
     pca = PCA(n_components=ncomp, svd_solver='full').fit(X_fit)  # centered by default
     k = min(_select_k_for_variance(pca.explained_variance_ratio_), ncomp)
-    Xr = pca.transform(X_all)[:, :k].astype(np.float32)
-    _mark_exec('svd', 'CPU', 'sklearn PCA-95% (embedding mode)')
-    return Xr, k
+    _mark_exec('svd', 'CPU', 'sklearn PCA-95% (embedding mode, streamed)')
+    return pca, k
 
 
-def _pca_reduce_cuml(X_fit, X_all, ncomp):
-    """Centered PCA on GPU (cuML, svd_solver='full'). Net-new vs the k-mer path's sparse SVD; wrapped by
-    an OOM/error guard + CPU fallback in embedding_pca_reduce. Returns (Xr float32, k)."""
-    import cuml  # noqa: F401
-    from cuml.decomposition import PCA as cuPCA
-    print("Using GPU-accelerated centered PCA (RAPIDS cuML, svd_solver='full')...")
-    pca = cuPCA(n_components=ncomp, svd_solver='full').fit(X_fit)
-    evr = pca.explained_variance_ratio_
-    try:
-        import cupy as cp
-        evr = cp.asnumpy(evr)
-        k = min(_select_k_for_variance(np.asarray(evr)), ncomp)
-        Xr = cp.asnumpy(pca.transform(X_all))
-    except ImportError:
-        evr = np.asarray(evr)
-        k = min(_select_k_for_variance(evr), ncomp)
-        Xr = np.asarray(pca.transform(X_all))
-    _mark_exec('svd', 'GPU', 'cuML PCA-95% (embedding mode)')
-    return Xr[:, :k].astype(np.float32), k
-
-
-def _fit_sample(X, max_sequences, n):
-    """Seeded fit-sample for the CPU PCA fit (the dense svd_solver='full' fit on all rows is a CPU
-    bottleneck). Returns X unchanged when max_sequences is 0/disabled or n is already below it."""
-    if max_sequences and max_sequences > 0 and n > max_sequences:
-        rng = np.random.default_rng(RANDOM_STATE)
-        print(f"PCA fit-sample (CPU): {n} unique vectors > --max-sequences={max_sequences}; "
-              f"fitting on {max_sequences} sampled vectors, transforming all.")
-        return X[rng.choice(n, size=max_sequences, replace=False)]
-    return X
-
-
-def embedding_pca_reduce(X, args):
-    """Centered PCA → the 95%-variance component count (cap SVD_MAX_COMPONENTS); transform ALL rows.
-
-    Per-backend fit policy mirrors the sequence path exactly:
-      - GPU (cuML): fit on ALL unique rows, no cap — like run_gpu_pipeline (sequence GPU fits on all).
-      - CPU (sklearn): fit on a seeded --max-sequences sample — like run_cpu_pipeline, since dense
-        svd_solver='full' on all rows is a CPU bottleneck.
-    A GPU OOM/error falls back to the (fit-sampled).
-    Returns (Xr float32, k)."""
-    n, D = X.shape
-    cap = min(SVD_MAX_COMPONENTS, n - 1, D)
-    if cap < 1:
-        return X.astype(np.float32), D
-
-    if args.svd_backend in ('cuml', 'auto'):
-        try:
-            ncomp = min(cap, n - 1, D)   # GPU: fit on ALL unique rows (no cap)
-            return _pca_reduce_cuml(X, X, ncomp)
-        except Exception as e:  # noqa: BLE001 — OOM/import/CUDA all fall back to CPU
-            if args.svd_backend == 'cuml':
-                print(f"Error: cuML PCA failed and backend forced to 'cuml': {e}")
-                raise
-            print(f"cuML PCA unavailable or failed ({e}); falling back to CPU PCA (fit-sampled).")
-
-    # CPU: fit on a seeded --max-sequences sample (matches the sequence CPU path), transform all.
-    X_fit = _fit_sample(X, args.max_sequences, n)
-    ncomp = min(cap, X_fit.shape[0] - 1, D)
-    return _pca_reduce_sklearn(X_fit, X, ncomp)
-
-
-def run_embedding_umap(Xn, umap_model, run_type, args):
-    """Fit/transform UMAP on the reduced, L2-normalized matrix (already materialized — no per-chunk
-    feature recompute). GPU: single fit_transform on all rows. CPU: fit on a sub-sample
-    (UMAP_FIT_MAX_SAMPLE_SIZE), transform all rows. Default metric is Euclidean on both backends, which
-    on L2-normalized vectors is a monotonic function of cosine similarity. Returns (n, 2) coords."""
-    n = Xn.shape[0]
-    start = time.time()
-    fell_back = False
-    if run_type == 'gpu':
-        try:
-            coords = np.asarray(umap_model.fit_transform(Xn))
-            _mark_exec('umap', 'GPU', 'cuML UMAP.fit_transform() returned (embedding mode)')
-            print(f"UMAP (GPU) completed in {time.time() - start:.2f} seconds.\n")
-            return coords
-        except Exception as e:  # noqa: BLE001
-            print(f"Warning: GPU UMAP failed - {e}. Falling back to CPU UMAP...")
-            umap_model, run_type = create_umap_model(
-                'sklearn', args.umap_components, args.umap_neighbors, args.umap_min_dist)
-            fell_back = True
-
-    # Isolated, seeded RNG (deterministic, doesn't touch global numpy state) — matches _fit_sample.
+def _fit_umap_cpu(umap_model, Xn_fit):
+    """Fit umap-learn on the L2-normalized fit-sample reduction. Sub-samples to
+    UMAP_FIT_MAX_SAMPLE_SIZE first (seeded, isolated RNG), matching the pre-streaming CPU UMAP fit
+    size. Xn_fit is already L2-normalized (Euclidean ≡ cosine ranking)."""
+    n = Xn_fit.shape[0]
     rng = np.random.default_rng(RANDOM_STATE)
     if n > UMAP_FIT_MAX_SAMPLE_SIZE:
-        print(f"Fit sample ({n}) > {UMAP_FIT_MAX_SAMPLE_SIZE}. "
-              f"Sampling {UMAP_FIT_MAX_SAMPLE_SIZE} vectors for UMAP fitting.")
+        print(f"UMAP fit sample ({n}) > {UMAP_FIT_MAX_SAMPLE_SIZE}. "
+              f"Sub-sampling {UMAP_FIT_MAX_SAMPLE_SIZE} vectors for the UMAP fit.")
         idx = rng.choice(n, size=UMAP_FIT_MAX_SAMPLE_SIZE, replace=False)
-        umap_model.fit(Xn[idx])
+        umap_model.fit(Xn_fit[idx])
     else:
-        umap_model.fit(Xn)
-    coords = np.asarray(umap_model.transform(Xn))
-    detail = (
-        'umap-learn fit+transform (embedding mode, fallback after GPU UMAP failure)'
-        if fell_back
-        else 'umap-learn fit+transform (embedding mode)'
-    )
-    _mark_exec('umap', 'CPU', detail)
-    print(f"UMAP (CPU) completed in {time.time() - start:.2f} seconds.\n")
-    return coords
+        umap_model.fit(Xn_fit)
+    _mark_exec('umap', 'CPU', 'umap-learn UMAP.fit() returned (embedding mode, streamed)')
+
+
+def _transform_batch_cpu(pca, k, umap_model, n_components, X_batch):
+    """Project one clonotype block through the fitted PCA + UMAP (out-of-sample transform). Degenerate
+    (near-zero post-PCA residual) rows get NaN coords (null downstream), matching the fit-side
+    exclusion. Returns (coords float64 (b, n_components), n_degenerate)."""
+    reduced = X_batch if pca is None else pca.transform(X_batch)[:, :k]
+    coords = np.full((reduced.shape[0], n_components), np.nan, dtype=np.float64)
+    valid = np.linalg.norm(reduced, axis=1) > DEGENERATE_NORM_THRESHOLD
+    if valid.any():
+        coords[valid] = np.asarray(umap_model.transform(l2_normalize(reduced[valid])))
+    return coords, int((~valid).sum())
+
+
+def _run_embedding_cpu(pf, D, n_clonotypes, min_required, args, output_path):
+    """CPU two-pass streaming path. Pass A: stream once, gather a seeded fit sample bounded to
+    ~max_sequences x D. Fit PCA + UMAP on it. Pass B: stream again, project every clonotype through the
+    fitted models in batches, accumulating only the 2-D coordinates. Never holds the full N x D matrix.
+    Returns (keys, coords, n_degenerate, k_pca); raises _EmptyEmbeddingResult when there are too few
+    non-degenerate vectors (empty output already written)."""
+    fit_size = args.max_sequences if (args.max_sequences and args.max_sequences > 0) else n_clonotypes
+    fit_size = min(fit_size, n_clonotypes)
+
+    # --- Pass A: gather the seeded fit sample. choice-over-N is the same sampling algorithm as the
+    #     pre-streaming _fit_sample; collected in stream order via a global row counter. ---
+    rng = np.random.default_rng(RANDOM_STATE)
+    if fit_size < n_clonotypes:
+        sel = np.sort(rng.choice(n_clonotypes, size=fit_size, replace=False))
+        print(f"Fit sample: {n_clonotypes} clonotypes > --max-sequences={args.max_sequences}; "
+              f"gathering {fit_size} sampled vectors while streaming (PCA/UMAP fit on the sample, all "
+              f"clonotypes transformed).")
+    else:
+        sel = np.arange(n_clonotypes)
+        print(f"Fit sample: {n_clonotypes} clonotypes <= --max-sequences; fitting on all.")
+
+    X_fit = np.empty((fit_size, D), dtype=np.float32)
+    g = 0
+    for _, mat in _stream_clonotypes(pf, args.key_col, args.dim_col, args.value_col, D):
+        b = mat.shape[0]
+        lo = int(np.searchsorted(sel, g))
+        hi = int(np.searchsorted(sel, g + b))
+        if hi > lo:
+            X_fit[lo:hi] = mat[sel[lo:hi] - g]
+        g += b
+    print(f"Fit sample gathered: {X_fit.shape[0]} x {D} (peak RSS {_peak_rss_gib():.2f} GiB).")
+
+    # --- Fit centered PCA on the sample ---
+    start_pca = time.time()
+    pca, k_pca = _fit_pca_cpu(X_fit)
+    Xr_fit = X_fit if pca is None else pca.transform(X_fit)[:, :k_pca]
+    print(f"Centered PCA: {D} → {k_pca} components (95% variance, cap {SVD_MAX_COMPONENTS}) "
+          f"in {time.time() - start_pca:.2f}s.")
+
+    # --- Degenerate check on the fit sample; fit UMAP on its non-degenerate rows ---
+    valid_fit = np.linalg.norm(Xr_fit, axis=1) > DEGENERATE_NORM_THRESHOLD
+    n_valid_fit = int(valid_fit.sum())
+    if n_valid_fit < min_required:
+        print(f"Warning: Not enough non-degenerate vectors in the fit sample for UMAP "
+              f"(required {min_required}, valid {n_valid_fit}) — writing empty output.")
+        create_empty_umap_output(KEY_COL, args.umap_components, output_path)
+        create_empty_skipped_summary(args.output_dir,
+                                     "UMAP analysis skipped due to insufficient non-degenerate vectors.")
+        raise _EmptyEmbeddingResult()
+
+    umap_model, _ = create_umap_model('sklearn', args.umap_components, args.umap_neighbors,
+                                      args.umap_min_dist)
+    print(f"Fitting UMAP on {n_valid_fit} non-degenerate fit-sample vectors "
+          f"(L2-normalized, Euclidean ≡ cosine)...")
+    start_umap = time.time()
+    _fit_umap_cpu(umap_model, l2_normalize(Xr_fit[valid_fit]))
+    print(f"UMAP fit completed in {time.time() - start_umap:.2f}s.")
+
+    # --- Pass B: project every clonotype in batches (out-of-sample transform) ---
+    start_tr = time.time()
+    keys_parts, coords_parts, n_degenerate = [], [], 0
+    for ks, mat in _stream_clonotypes(pf, args.key_col, args.dim_col, args.value_col, D):
+        c, nd = _transform_batch_cpu(pca, k_pca, umap_model, args.umap_components, mat)
+        keys_parts.append(ks)
+        coords_parts.append(c)
+        n_degenerate += nd
+    keys = np.concatenate(keys_parts) if keys_parts else np.array([], dtype=object)
+    coords = np.vstack(coords_parts) if coords_parts else np.empty((0, args.umap_components))
+    print(f"Transformed all {keys.shape[0]} clonotypes in {time.time() - start_tr:.2f}s "
+          f"(degenerate-excluded={n_degenerate}).")
+    return keys, coords, n_degenerate, k_pca
+
+
+def _run_embedding_gpu(pf, D, n_clonotypes, min_required, args, output_path):
+    """GPU path: stream the long-format parquet straight into a preallocated device array (the
+    host never holds more than one batch — the eager host-RAM peak is gone), then keep cuML's
+    fit-on-all behaviour unchanged: cuPCA fit+transform on ALL clonotypes, cuML UMAP fit_transform on
+    all. Returns (keys, coords, n_degenerate, k_pca). Raises _EmptyEmbeddingResult for too-few valid
+    vectors; raises on any GPU/CUDA error so the caller can fall back to the CPU streaming path."""
+    import cupy as cp
+    import cuml  # noqa: F401
+    from cuml.decomposition import PCA as cuPCA
+
+    Xd = cp.empty((n_clonotypes, D), dtype=cp.float32)
+    keys = np.empty(n_clonotypes, dtype=object)
+    g = 0
+    for ks, mat in _stream_clonotypes(pf, args.key_col, args.dim_col, args.value_col, D):
+        b = mat.shape[0]
+        Xd[g:g + b] = cp.asarray(mat)
+        keys[g:g + b] = ks
+        g += b
+    print(f"Streamed {g} clonotypes into VRAM ({Xd.nbytes / 1024**3:.2f} GiB on device; "
+          f"host peak RSS {_peak_rss_gib():.2f} GiB).")
+
+    # Centered PCA on ALL clonotypes (device) — unchanged fit-on-all behaviour.
+    ncomp = min(SVD_MAX_COMPONENTS, n_clonotypes - 1, D)
+    print("Fitting centered PCA (RAPIDS cuML, svd_solver='full') on ALL clonotypes (GPU)...")
+    pca = cuPCA(n_components=ncomp, svd_solver='full').fit(Xd)
+    k_pca = min(_select_k_for_variance(cp.asnumpy(pca.explained_variance_ratio_)), ncomp)
+    Xr = pca.transform(Xd)[:, :k_pca]
+    _mark_exec('svd', 'GPU', 'cuML PCA-95% (embedding mode, streamed load)')
+    print(f"Centered PCA: {D} → {k_pca} components (95% variance, cap {SVD_MAX_COMPONENTS}).")
+
+    # Degenerate detection + eps-guarded L2-normalize on device (mirrors l2_normalize).
+    pre_norm = cp.linalg.norm(Xr, axis=1)
+    valid = pre_norm > DEGENERATE_NORM_THRESHOLD
+    n_valid = int(valid.sum())
+    n_degenerate = int(n_clonotypes - n_valid)
+    if n_degenerate:
+        print(f"Warning: {n_degenerate} vector(s) near-zero norm post-PCA — excluded, null coords.")
+    if n_valid < min_required:
+        print(f"Warning: Not enough non-degenerate vectors for UMAP "
+              f"(required {min_required}, valid {n_valid}) — writing empty output.")
+        create_empty_umap_output(KEY_COL, args.umap_components, output_path)
+        create_empty_skipped_summary(args.output_dir,
+                                     "UMAP analysis skipped due to insufficient non-degenerate vectors.")
+        raise _EmptyEmbeddingResult()
+    Xn = Xr[valid] / cp.maximum(pre_norm[valid][:, None], 1e-12)
+
+    umap_model, run_type = create_umap_model(args.umap_backend, args.umap_components,
+                                             args.umap_neighbors, args.umap_min_dist)
+    if run_type != 'gpu':
+        raise RuntimeError("cuML UMAP unavailable despite a usable GPU PCA — deferring to CPU path.")
+    print(f"Running UMAP (GPU, fit_transform on all {n_valid} non-degenerate vectors)...")
+    start_umap = time.time()
+    coords_valid = cp.asnumpy(umap_model.fit_transform(Xn))
+    _mark_exec('umap', 'GPU', 'cuML UMAP.fit_transform() returned (embedding mode, streamed load)')
+    print(f"UMAP (GPU) completed in {time.time() - start_umap:.2f}s.")
+
+    coords = np.full((n_clonotypes, args.umap_components), np.nan, dtype=np.float64)
+    coords[cp.asnumpy(valid)] = coords_valid
+    return keys, coords, n_degenerate, k_pca
 
 
 def _peak_rss_gib():
@@ -1239,19 +1351,16 @@ def _peak_rss_gib():
 
 
 def run_embedding_mode(args, output_path):
-    """Embedding feature path: load matrix → vector-dedup → centered PCA-95% → L2-normalize (eps-guarded,
-    degenerate rows excluded) → Euclidean UMAP → broadcast back to all clonotypes → write outputs.
-
-    Empty / too-few-rows inputs write an empty output and return (the k-mer path's guards are TSV/
-    sequence-specific, so embedding mode carries its own here). Clonotypes ABSENT from the embedding
-    column never enter this input, so they are simply absent from the output (sparse), like the k-mer
-    path's no-sequence drop — not the invalid-character null-coord path."""
-    print(f"Loading embedding matrix {args.matrix} ...")
-    X, keys = load_embedding_matrix(args.matrix, args.key_col, args.dim_col, args.value_col)
-    n_clonotypes = X.shape[0]
-    D = X.shape[1] if n_clonotypes else 0
-    print(f"Loaded {n_clonotypes} clonotypes x {D} embedding dims.")
-    print(f"Peak memory after matrix load: {_peak_rss_gib():.2f} GiB")
+    """Embedding feature path: stream matrix → centered PCA-95% → L2-normalize (degenerate rows
+    excluded, null coords) → Euclidean UMAP → write outputs. The full N x D matrix is never
+    materialized (see the module comment above). Empty / too-few-clonotype inputs write an empty
+    output. Clonotypes ABSENT from the embedding column never enter this input, so they are simply
+    absent from the output (sparse) — not the invalid-character null-coord path."""
+    print(f"Opening embedding matrix {args.matrix} ...")
+    pf, D = _open_matrix(args.matrix, args.key_col, args.dim_col, args.value_col, args.dims)
+    n_clonotypes = _clonotype_count(pf, D)
+    print(f"Embedding matrix: {n_clonotypes} clonotypes x {D} embedding dims "
+          f"(from parquet footer; no full load).")
 
     if n_clonotypes == 0:
         print("Warning: Embedding matrix is empty — writing empty output.")
@@ -1261,81 +1370,51 @@ def run_embedding_mode(args, output_path):
         return
 
     min_required = max(args.umap_neighbors + 1, 4)
-
-    # Vector-dedup (exact, bit-identical for same-model embeddings): collapse identical rows before the
-    # fit, re-expand after via the inverse index.
-    uniq, inv = np.unique(X, axis=0, return_inverse=True)
-    inv = inv.ravel()
-    n_unique = uniq.shape[0]
-    if n_unique < n_clonotypes:
-        print(f"Deduplicating vectors: {n_clonotypes} → {n_unique} unique "
-              f"({n_clonotypes - n_unique} identical vectors collapsed for PCA/UMAP).")
-
-    if n_unique < min_required:
-        print(f"Warning: Not enough unique embedding vectors for UMAP "
-              f"(required {min_required}, unique {n_unique}) — writing empty output.")
+    if n_clonotypes < min_required:
+        print(f"Warning: Not enough clonotypes for UMAP (required {min_required}, "
+              f"have {n_clonotypes}) — writing empty output.")
         create_empty_umap_output(KEY_COL, args.umap_components, output_path)
         create_empty_skipped_summary(args.output_dir,
-                                     "UMAP analysis skipped due to insufficient unique vectors.")
+                                     "UMAP analysis skipped due to insufficient clonotypes.")
         return
 
-    # Centered PCA → 95% variance (cap 500). GPU fits on all unique rows (no cap, like the sequence
-    # GPU path); CPU fits on a seeded --max-sequences sample.
-    start_pca = time.time()
-    Xr, k_pca = embedding_pca_reduce(uniq, args)
-    print(f"Centered PCA: {uniq.shape[1]} → {k_pca} components (95% variance, cap "
-          f"{SVD_MAX_COMPONENTS}) in {time.time() - start_pca:.2f}s.")
+    # Backend: try the GPU path unless a backend is pinned to sklearn; fall back to CPU streaming
+    # on any GPU/CUDA failure. Neither path holds the full N x D matrix in host RAM.
+    try_gpu = args.umap_backend in ('cuml', 'auto') and args.svd_backend != 'sklearn'
+    used_gpu = False
+    result = None
+    if try_gpu:
+        try:
+            result = _run_embedding_gpu(pf, D, n_clonotypes, min_required, args, output_path)
+            used_gpu = True
+        except _EmptyEmbeddingResult:
+            return
+        except Exception as e:  # noqa: BLE001 — OOM/import/CUDA all fall back to CPU streaming
+            if args.umap_backend == 'cuml':
+                print(f"Error: GPU embedding path failed and --umap-backend forced to 'cuml': {e}")
+                raise
+            print(f"GPU embedding path unavailable or failed ({e}); falling back to CPU streaming.")
 
-    # Degenerate (near-zero post-PCA residual) detection BEFORE normalization: such a vector sits at the
-    # dataset mean, so its normalized direction is numerical noise — exclude from the fit, null coords,
-    # count. The eps-guarded L2-normalize itself can't 0/0; Euclidean never NaNs from a zero row.
-    pre_norm = np.linalg.norm(Xr, axis=1)
-    valid = pre_norm > DEGENERATE_NORM_THRESHOLD
-    n_degenerate = int((~valid).sum())
-    if n_degenerate:
-        print(f"Warning: {n_degenerate} unique vector(s) near-zero norm post-PCA "
-              f"(centered-PCA residual ≈ dataset mean) — excluded from the UMAP fit, null coords.")
-    n_valid = int(valid.sum())
-    if n_valid < min_required:
-        print(f"Warning: Not enough non-degenerate vectors for UMAP "
-              f"(required {min_required}, valid {n_valid}) — writing empty output.")
-        create_empty_umap_output(KEY_COL, args.umap_components, output_path)
-        create_empty_skipped_summary(args.output_dir,
-                                     "UMAP analysis skipped due to insufficient non-degenerate vectors.")
-        return
+    if result is None:
+        try:
+            result = _run_embedding_cpu(pf, D, n_clonotypes, min_required, args, output_path)
+        except _EmptyEmbeddingResult:
+            return
 
-    # Normalize only the valid (non-degenerate) rows we actually fit/transform — avoids dividing a
-    # near-zero residual by eps and amplifying numerical noise into rows we'd then discard.
-    Xn_valid = l2_normalize(Xr[valid])
-
-    umap_model, run_type = create_umap_model(
-        args.umap_backend, args.umap_components, args.umap_neighbors, args.umap_min_dist)
-
-    print(f"Running UMAP on {n_valid} non-degenerate unique vectors "
-          f"(L2-normalized, Euclidean ≡ cosine)...")
-    coords_valid = run_embedding_umap(Xn_valid, umap_model, run_type, args)
-
-    # Degenerate uniques get NaN coords; assemble the full unique-coord matrix, then broadcast to every
-    # clonotype via the dedup inverse index. NaN rows surface as null coords downstream.
-    coords_unique = np.full((n_unique, args.umap_components), np.nan, dtype=np.float64)
-    coords_unique[valid] = coords_valid
-    coords_all = coords_unique[inv]
-
+    keys, coords, n_degenerate, k_pca = result
     print(f"Embedding UMAP summary: model={args.embedding_model or '(unknown)'}, mode=embedding, "
-          f"clonotypes={n_clonotypes}, unique={n_unique}, PCA k={k_pca}, "
-          f"degenerate-excluded={n_degenerate}")
+          f"clonotypes={n_clonotypes}, PCA k={k_pca}, degenerate-excluded={n_degenerate}")
+    write_embedding_outputs(args, keys, coords, output_path,
+                            n_clonotypes=n_clonotypes, k_pca=k_pca, n_degenerate=n_degenerate)
 
-    write_embedding_outputs(args, keys, coords_all, output_path,
-                            n_clonotypes=n_clonotypes, n_unique=n_unique, k_pca=k_pca,
-                            n_degenerate=n_degenerate)
-
-    # Peak memory across the whole embedding run (matrix load + dedup + PCA + UMAP). Reported so the
-    # mem control can be sized to the actual N x D footprint, and to calibrate any backend cap.
+    # Peak memory across the whole embedding run. Reported so the mem control can be calibrated to the
+    # actual (now N-independent) footprint — a fit-sample-bounded peak, not the old N x D load.
     print(f"Peak memory (RSS) for embedding run: {_peak_rss_gib():.2f} GiB "
-          f"(N={n_clonotypes}, unique={n_unique}, D={D}, PCA backend fit + UMAP).")
+          f"(N={n_clonotypes}, D={D}, "
+          f"{'GPU fit-on-all + streamed load' if used_gpu else 'CPU streamed sample + batched transform'}).")
 
 
-def write_embedding_outputs(args, keys, coords_all, output_path, n_clonotypes, n_unique, k_pca,
+def write_embedding_outputs(args, keys, coords_all, output_path, n_clonotypes, k_pca,
                             n_degenerate):
     """Write the UMAP coordinates TSV (clonotypeKey, UMAP1, UMAP2, …) and the processing-log summary.
 
@@ -1362,7 +1441,6 @@ def write_embedding_outputs(args, keys, coords_all, output_path, n_clonotypes, n
         f.write("Embedding-mode UMAP summary\n")
         f.write(f"Embedding model: {args.embedding_model or '(unknown)'}\n")
         f.write(f"Clonotypes embedded: {n_clonotypes}\n")
-        f.write(f"Unique vectors (after dedup): {n_unique}\n")
         f.write(f"PCA components (95% variance): {k_pca}\n")
         f.write(f"Degenerate clonotypes excluded (null coords): {n_degenerate}\n")
     print(f"Embedding UMAP summary saved to {summary_path}")

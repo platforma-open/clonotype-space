@@ -92,6 +92,8 @@ wf.body(func(args) {
 		processInputs.keyCol = keyCol
 		processInputs.dimCol = embSpec.axesSpec[1].annotations["pl7.app/label"]
 		processInputs.valueCol = embSpec.annotations["pl7.app/label"]
+		// Embedding vector length D — passed to main.py's streaming loader as --dims (avoids a scan).
+		processInputs.dims = embSpec.annotations["pl7.app/embedding/length"]
 	} else {
 		processInputs.sequencesRef = sequencesRef
 		processInputs.sequenceType = args.sequenceType

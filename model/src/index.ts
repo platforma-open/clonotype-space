@@ -14,7 +14,7 @@ import { blockDataModel } from "./dataModel";
 import { getDefaultBlockLabel } from "./label";
 import type { BlockArgs, BlockData } from "./types";
 
-type Column = PColumn<DataInfo<TreeNodeAccessor> | TreeNodeAccessor | PColumnValues>;
+type Column = PColumn<DataInfo<TreeNodeAccessor> | TreeNodeAccessor | PColumnValues | undefined>;
 
 const inputAnchorSpecs = [
   {
