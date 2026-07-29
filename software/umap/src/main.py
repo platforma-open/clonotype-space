@@ -1266,10 +1266,27 @@ def _run_embedding_cpu(pf, D, n_clonotypes, min_required, args, output_path):
 
     umap_model, _ = create_umap_model('sklearn', args.umap_components, args.umap_neighbors,
                                       args.umap_min_dist)
+    Xn_fit = l2_normalize(Xr_fit[valid_fit])
+
+    # Unique-vector guard. Below n_neighbors+1 DISTINCT vectors every neighbour sits at distance 0, so
+    # umap-learn has no local structure to anchor the layout: it still separates the distinct vectors,
+    # but scatters each duplicate group over a radius comparable to the distance between genuinely
+    # different vectors — inventing spread the data does not have. Bail to an empty output, as
+    # _run_embedding_gpu does for the same case; both dedup post-L2-normalize so the counts agree.
+    # NOT the dropped global dedup: this reads only the fit sample (<= max_sequences x k), never all N.
+    n_unique_fit = int(np.unique(Xn_fit, axis=0).shape[0])
+    if n_unique_fit < min_required:
+        print(f"Warning: Not enough unique non-degenerate vectors in the fit sample for UMAP "
+              f"(required {min_required}, unique {n_unique_fit}) — writing empty output.")
+        create_empty_umap_output(KEY_COL, args.umap_components, output_path)
+        create_empty_skipped_summary(args.output_dir,
+                                     "UMAP analysis skipped due to insufficient unique vectors.")
+        raise _EmptyEmbeddingResult()
+
     print(f"Fitting UMAP on {n_valid_fit} non-degenerate fit-sample vectors "
-          f"(L2-normalized, Euclidean ≡ cosine)...")
+          f"({n_unique_fit} unique; L2-normalized, Euclidean ≡ cosine)...")
     start_umap = time.time()
-    _fit_umap_cpu(umap_model, l2_normalize(Xr_fit[valid_fit]))
+    _fit_umap_cpu(umap_model, Xn_fit)
     print(f"UMAP fit completed in {time.time() - start_umap:.2f}s.")
 
     # --- Pass B: project every clonotype in batches (out-of-sample transform) ---
