@@ -1067,6 +1067,13 @@ def run_cpu_pipeline(args, df_valid, sequences_all, umap_model):
 # per-batch footprint constant regardless of the RAM the backend granted.
 EMBEDDING_STREAM_BATCH_ROWS = 4_000_000
 
+# GPU IncrementalPCA fit batch: number of clonotypes per partial_fit call. Decoupled from the parquet
+# stream granularity (a 4M-row read yields ~4M/D clonotypes) by buffering whole-clonotype blocks up to
+# this target. Fixed (not memory-scaled) so the incremental-SVD result is reproducible across backends;
+# must stay >= the PCA component count (n_components <= batch rows), which holds by a wide margin
+# (100k >> SVD_MAX_COMPONENTS=500).
+GPU_PCA_FIT_BATCH = 100_000
+
 
 class _EmptyEmbeddingResult(Exception):
     """Signals that an embedding path already wrote the empty output files and processing should
@@ -1281,34 +1288,64 @@ def _run_embedding_cpu(pf, D, n_clonotypes, min_required, args, output_path):
 
 
 def _run_embedding_gpu(pf, D, n_clonotypes, min_required, args, output_path):
-    """GPU path: stream the long-format parquet straight into a preallocated device array (the
-    host never holds more than one batch — the eager host-RAM peak is gone), then keep cuML's
-    fit-on-all behaviour unchanged: cuPCA fit+transform on ALL clonotypes, cuML UMAP fit_transform on
-    all. Returns (keys, coords, n_degenerate, k_pca). Raises _EmptyEmbeddingResult for too-few valid
-    vectors; raises on any GPU/CUDA error so the caller can fall back to the CPU streaming path."""
+    """GPU path: stream the long-format parquet through cuML IncrementalPCA so the full N x D matrix is
+    NEVER resident on the device (the old fit-on-all cuPCA held it whole and OOM'd at scale). Two passes
+    over the parquet: pass 1 partial_fit IncrementalPCA on ~GPU_PCA_FIT_BATCH-clonotype buffers (device
+    memory bounded to one batch + the components); pass 2 re-stream and transform every clonotype into
+    the reduced N x k on device. Then cuML UMAP fit_transform on all non-degenerate reduced points —
+    still fit-on-all, but on the small reduced matrix rather than the raw embeddings. Returns
+    (keys, coords, n_degenerate, k_pca). Raises _EmptyEmbeddingResult for too-few valid vectors; raises
+    on any GPU/CUDA error so the caller can fall back to the CPU streaming path."""
     import cupy as cp
     import cuml  # noqa: F401
-    from cuml.decomposition import PCA as cuPCA
+    from cuml.decomposition import IncrementalPCA as cuIncrementalPCA
 
-    Xd = cp.empty((n_clonotypes, D), dtype=cp.float32)
+    ncomp = min(SVD_MAX_COMPONENTS, n_clonotypes - 1, D)
+
+    # --- Pass 1: streaming centered IncrementalPCA. Whole-clonotype blocks are buffered on the host to
+    #     ~GPU_PCA_FIT_BATCH, then moved to the device one batch at a time for partial_fit. One full
+    #     batch is held back so the FINAL partial_fit is never a sub-batch remainder (guaranteeing every
+    #     batch has >= ncomp rows); an input below one batch is fit in a single call. ---
+    ipca = cuIncrementalPCA(n_components=ncomp)
+    print(f"Fitting centered IncrementalPCA (RAPIDS cuML) on ALL clonotypes, streaming in "
+          f"~{GPU_PCA_FIT_BATCH}-clonotype batches (GPU)...")
+    start_pca = time.time()
+    n_batches = 0
+    prev, buf, buf_rows = None, [], 0
+    for _, mat in _stream_clonotypes(pf, args.key_col, args.dim_col, args.value_col, D):
+        buf.append(mat)
+        buf_rows += mat.shape[0]
+        if buf_rows >= GPU_PCA_FIT_BATCH:
+            block = np.concatenate(buf)
+            if prev is not None:
+                ipca.partial_fit(cp.asarray(prev))
+                n_batches += 1
+            prev, buf, buf_rows = block, [], 0
+    remainder = np.concatenate(buf) if buf else None
+    tail = remainder if prev is None else (prev if remainder is None
+                                           else np.concatenate([prev, remainder]))
+    if tail is not None:
+        ipca.partial_fit(cp.asarray(tail))
+        n_batches += 1
+
+    k_pca = min(_select_k_for_variance(cp.asnumpy(ipca.explained_variance_ratio_)), ncomp)
+    _mark_exec('svd', 'GPU', 'cuML IncrementalPCA-95% (embedding mode, streamed fit)')
+    print(f"Centered IncrementalPCA: {D} → {k_pca} components (95% variance, cap {SVD_MAX_COMPONENTS}) "
+          f"over {n_batches} batch(es) in {time.time() - start_pca:.2f}s "
+          f"(host peak RSS {_peak_rss_gib():.2f} GiB).")
+
+    # --- Pass 2: re-stream and transform every clonotype into the reduced N x k on device. This N x k
+    #     matrix (k <= SVD_MAX_COMPONENTS) is the only large device array now — never the raw N x D. ---
+    Xr = cp.empty((n_clonotypes, k_pca), dtype=cp.float32)
     keys = np.empty(n_clonotypes, dtype=object)
     g = 0
     for ks, mat in _stream_clonotypes(pf, args.key_col, args.dim_col, args.value_col, D):
         b = mat.shape[0]
-        Xd[g:g + b] = cp.asarray(mat)
+        Xr[g:g + b] = ipca.transform(cp.asarray(mat))[:, :k_pca]
         keys[g:g + b] = ks
         g += b
-    print(f"Streamed {g} clonotypes into VRAM ({Xd.nbytes / 1024**3:.2f} GiB on device; "
-          f"host peak RSS {_peak_rss_gib():.2f} GiB).")
-
-    # Centered PCA on ALL clonotypes (device) — unchanged fit-on-all behaviour.
-    ncomp = min(SVD_MAX_COMPONENTS, n_clonotypes - 1, D)
-    print("Fitting centered PCA (RAPIDS cuML, svd_solver='full') on ALL clonotypes (GPU)...")
-    pca = cuPCA(n_components=ncomp, svd_solver='full').fit(Xd)
-    k_pca = min(_select_k_for_variance(cp.asnumpy(pca.explained_variance_ratio_)), ncomp)
-    Xr = pca.transform(Xd)[:, :k_pca]
-    _mark_exec('svd', 'GPU', 'cuML PCA-95% (embedding mode, streamed load)')
-    print(f"Centered PCA: {D} → {k_pca} components (95% variance, cap {SVD_MAX_COMPONENTS}).")
+    print(f"Transformed {g} clonotypes to the reduced {k_pca}-d space "
+          f"({Xr.nbytes / 1024**3:.2f} GiB on device).")
 
     # Degenerate detection + eps-guarded L2-normalize on device (mirrors l2_normalize).
     pre_norm = cp.linalg.norm(Xr, axis=1)
@@ -1325,16 +1362,37 @@ def _run_embedding_gpu(pf, D, n_clonotypes, min_required, args, output_path):
                                      "UMAP analysis skipped due to insufficient non-degenerate vectors.")
         raise _EmptyEmbeddingResult()
     Xn = Xr[valid] / cp.maximum(pre_norm[valid][:, None], 1e-12)
+    del Xr, pre_norm   # free the reduced matrix before dedup + UMAP
+
+    # Collapse EXACT-duplicate reduced vectors before the UMAP fit. Identical embeddings map to an
+    # identical PCA value (PCA is a deterministic linear map), and cuML's GPU UMAP places zero-distance
+    # duplicate points erratically (scattered artefacts).
+    Xn_host = cp.asnumpy(Xn)
+    del Xn
+    uniq, inv = np.unique(Xn_host, axis=0, return_inverse=True)
+    inv = inv.ravel()   # numpy 2.x can return a 2-D inverse for axis=0; flatten to (n_valid,)
+    n_unique = int(uniq.shape[0])
+    if n_unique < Xn_host.shape[0]:
+        print(f"Collapsing {Xn_host.shape[0]} → {n_unique} unique reduced vectors "
+              f"({Xn_host.shape[0] - n_unique} exact duplicates) before the GPU UMAP fit.")
+    if n_unique < min_required:
+        print(f"Warning: Not enough unique non-degenerate vectors for UMAP "
+              f"(required {min_required}, unique {n_unique}) — writing empty output.")
+        create_empty_umap_output(KEY_COL, args.umap_components, output_path)
+        create_empty_skipped_summary(args.output_dir,
+                                     "UMAP analysis skipped due to insufficient unique vectors.")
+        raise _EmptyEmbeddingResult()
 
     umap_model, run_type = create_umap_model(args.umap_backend, args.umap_components,
                                              args.umap_neighbors, args.umap_min_dist)
     if run_type != 'gpu':
         raise RuntimeError("cuML UMAP unavailable despite a usable GPU PCA — deferring to CPU path.")
-    print(f"Running UMAP (GPU, fit_transform on all {n_valid} non-degenerate vectors)...")
+    print(f"Running UMAP (GPU, fit_transform on {n_unique} unique non-degenerate vectors)...")
     start_umap = time.time()
-    coords_valid = cp.asnumpy(umap_model.fit_transform(Xn))
-    _mark_exec('umap', 'GPU', 'cuML UMAP.fit_transform() returned (embedding mode, streamed load)')
+    uniq_coords = cp.asnumpy(umap_model.fit_transform(cp.asarray(uniq)))
+    _mark_exec('umap', 'GPU', 'cuML UMAP.fit_transform() returned (embedding mode, dedup + streamed fit)')
     print(f"UMAP (GPU) completed in {time.time() - start_umap:.2f}s.")
+    coords_valid = uniq_coords[inv]   # broadcast each unique's coords back to every valid clonotype
 
     coords = np.full((n_clonotypes, args.umap_components), np.nan, dtype=np.float64)
     coords[cp.asnumpy(valid)] = coords_valid
