@@ -1058,9 +1058,11 @@ def run_cpu_pipeline(args, df_valid, sequences_all, umap_model):
 # Memory handling for large inputs: the full N x D matrix is NEVER materialized. The CPU path
 # STREAMS the long-format parquet twice — once to collect a bounded, seeded fit sample
 # (~max_sequences x D), once to project every clonotype through the fitted PCA/UMAP in batches — so
-# peak memory is bounded by the fit sample, independent of N. The GPU path (G2) streams the load
-# straight into a device array (host stays bounded) and keeps cuML's fit-on-all behaviour unchanged.
-# Exact-duplicate vectors are NOT de-duplicated before the fit to avoid memory scaling.
+# its peak memory is bounded by the fit sample, independent of N. The GPU path streams through cuML
+# IncrementalPCA (partial_fit on ~100k-clonotype batches), so the raw N x D matrix is never resident on
+# the device either; there only the reduced N x k array and the fit-on-all UMAP scale with N. The
+# pre-PCA exact-duplicate dedup was dropped to avoid memory scaling; the GPU path instead collapses
+# exact duplicates AFTER PCA, on the small reduced vectors, right before the UMAP fit.
 
 # Fixed, data-derived batch size for the streaming reads: 4M long-format rows per pyarrow batch.
 # Deliberately NOT scaled by the allocated memory — a fixed batch keeps assembly deterministic and the
@@ -1466,10 +1468,11 @@ def run_embedding_mode(args, output_path):
                             n_clonotypes=n_clonotypes, k_pca=k_pca, n_degenerate=n_degenerate)
 
     # Peak memory across the whole embedding run. Reported so the mem control can be calibrated to the
-    # actual (now N-independent) footprint — a fit-sample-bounded peak, not the old N x D load.
+    # actual footprint: the CPU path is fit-sample-bounded (independent of N); the GPU path scales with
+    # the reduced N x k array + the IncrementalPCA batches (never the raw N x D load).
     print(f"Peak memory (RSS) for embedding run: {_peak_rss_gib():.2f} GiB "
           f"(N={n_clonotypes}, D={D}, "
-          f"{'GPU fit-on-all + streamed load' if used_gpu else 'CPU streamed sample + batched transform'}).")
+          f"{'GPU streamed IncrementalPCA + fit-on-all UMAP' if used_gpu else 'CPU streamed sample + batched transform'}).")
 
 
 def write_embedding_outputs(args, keys, coords_all, output_path, n_clonotypes, k_pca,

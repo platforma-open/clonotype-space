@@ -20,8 +20,9 @@ f := exec.formula
 // Embeddings: sized off the parquet byte size (f.size).
 // onCPU.ram: main.py streams the embedding matrix (never loads the full N x D), so the CPU peak is
 // bounded by the fit sample (~max_sequences x D) plus the PCA fit, independent of N — hence a floor +
-// small size margin, NOT the old 12x eager-load multiple. onGPU.vram stays size-scaled: the GPU
-// path keeps cuML's fit-on-all, so the full matrix still lives in VRAM.
+// small size margin, NOT the old 12x eager-load multiple. onGPU.vram stays size-scaled: the reduced
+// N x k device array + the per-batch IncrementalPCA buffers still grow with input size (the raw N x D
+// matrix is never resident on the device).
 resourcesEmbeddings := func(builder) {
     size := f.size("input")
     return builder.resources({
