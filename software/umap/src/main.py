@@ -1106,20 +1106,35 @@ def _clonotype_count(pf, D):
 def _stream_clonotypes(pf, key_col, dim_col, value_col, D, batch_rows=EMBEDDING_STREAM_BATCH_ROWS):
     """Yield (keys, matrix) blocks of whole clonotypes, assembled from contiguous long-format rows and
     holding back the trailing clonotype that may continue in the next batch. Memory bounded to ~one
-    batch. Copied from embedding-clustering; keep the guards in sync."""
+    batch.
+
+    Requires the parquet to be clonotype-blocked. That holds by contract, not by luck: xsv.exportFrame
+    emits axis-sorted rows ("read_frame output is already sorted by axes (PFrame PTable contract)" --
+    sdk/workflow-tengo/src/pframes/xsv-export-pframe.tpl.tengo), and the embedding column's axes are
+    [clonotypeKey, embeddingDim], so all of a clonotype's D rows are contiguous. If that contract ever
+    changes this loader must go back to an order-independent scatter over the whole file."""
     def build(ks, ds, vs):
         # np.unique -> distinct keys `uk` (sorted) + `inv` (per-row index into uk). Scattering
         # mat[inv, ds] = vs drops each value into its (clonotype, embeddingDim) cell, so row order
         # within the block does not matter.
         uk, inv = np.unique(ks, return_inverse=True)
-        # Row-count guard: each clonotype must have exactly D contiguous rows.
-        if (np.bincount(inv) != D).any():
-            raise ValueError("a clonotype did not have exactly D contiguous rows -- the embedding "
-                             "matrix is not clonotype-blocked (the streaming loader needs contiguous rows).")
-        # Dimension-range guard: embeddingDim must be a 0..D-1 index.
+        # Dimension-range guard first: a wrong D is the likeliest cause of a row-count mismatch, and
+        # this check can name it outright. Fires when the declared D is too SMALL for the data.
         if ds.min() < 0 or ds.max() >= D:
             raise ValueError(f"embeddingDim out of range [0, {D}); saw {int(ds.min())}..{int(ds.max())} "
-                             f"-- pass the correct --dims (the pl7.app/embedding/length annotation).")
+                             f"-- --dims / the pl7.app/embedding/length annotation disagrees with the "
+                             f"data (its true vector length is at least {int(ds.max()) + 1}).")
+        # Row-count guard: each clonotype must have exactly D rows in this block. Report the observed
+        # count -- it IS the real vector length, which is what distinguishes the two causes that both
+        # land here: a wrong/stale pl7.app/embedding/length, or a matrix that is not clonotype-blocked.
+        counts = np.bincount(inv)
+        if (counts != D).any():
+            obs = int(counts[int(np.argmax(counts != D))])
+            raise ValueError(f"a clonotype has {obs} row(s), expected D={D} -- either --dims / the "
+                             f"pl7.app/embedding/length annotation disagrees with the data (its true "
+                             f"vector length looks like {obs}), or the embedding matrix is not "
+                             f"clonotype-blocked (the streaming loader needs each clonotype's rows "
+                             f"contiguous).")
         # Completeness: NaN-fill, scatter, require no cell left unset -- catches a duplicated dim (hence
         # a missing dim -> an unfilled hole) and any NaN in the value column.
         mat = np.full((uk.shape[0], D), np.nan, dtype=np.float32)
