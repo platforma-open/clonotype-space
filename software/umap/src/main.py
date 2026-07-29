@@ -1055,12 +1055,19 @@ def run_cpu_pipeline(args, df_valid, sequences_all, umap_model):
 # Centered PCA removes ESM-2's large non-discriminative shared mean, so the post-PCA
 # L2-normalize + Euclidean (≡ cosine ranking) then measures the mean-removed residuals.
 #
-# Memory handling for large inputs: the full N x D matrix is NEVER materialized. The CPU path
-# STREAMS the long-format parquet twice — once to collect a bounded, seeded fit sample
-# (~max_sequences x D), once to project every clonotype through the fitted PCA/UMAP in batches — so
-# peak memory is bounded by the fit sample, independent of N. The GPU path (G2) streams the load
-# straight into a device array (host stays bounded) and keeps cuML's fit-on-all behaviour unchanged.
-# Exact-duplicate vectors are NOT de-duplicated before the fit to avoid memory scaling.
+# Memory handling for large inputs: the full N x D matrix is NEVER materialized. Both paths STREAM the
+# long-format parquet twice.
+#   CPU: pass A collects a bounded, seeded fit sample (~max_sequences x D) and fits PCA + UMAP on it;
+#        pass B projects every clonotype through the fitted models in batches. Peak is the fit sample
+#        plus the O(N) output coordinates — NOT the old N x D load.
+#   GPU: pass 1 fits cuML IncrementalPCA on ~GPU_PCA_FIT_BATCH-clonotype batches; pass 2 transforms
+#        every clonotype into the reduced N x k_pca on device. The raw N x D never lands on the device
+#        either. The reduced matrix is then copied to the host for the duplicate collapse below.
+# Exact-duplicate handling differs by path, deliberately. The GPU path collapses duplicate reduced
+# vectors before the UMAP fit because cuML scatters zero-distance points. The CPU path does not: at any
+# normal duplication rate umap-learn's own transform lands duplicates on effectively identical
+# coordinates, so a global dedup would cost O(N) memory for nothing. It only guards the pathological
+# case of fewer distinct vectors than n_neighbors+1, where that no longer holds (see _run_embedding_cpu).
 
 # Fixed, data-derived batch size for the streaming reads: 4M long-format rows per pyarrow batch.
 # Deliberately NOT scaled by the allocated memory — a fixed batch keeps assembly deterministic and the

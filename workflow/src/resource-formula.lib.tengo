@@ -18,10 +18,15 @@ exec := import("@platforma-sdk/workflow-tengo:exec")
 f := exec.formula
 
 // Embeddings: sized off the parquet byte size (f.size).
-// onCPU.ram: main.py streams the embedding matrix (never loads the full N x D), so the CPU peak is
-// bounded by the fit sample (~max_sequences x D) plus the PCA fit, independent of N — hence a floor +
-// small size margin, NOT the old 12x eager-load multiple. onGPU.vram stays size-scaled: the GPU
-// path keeps cuML's fit-on-all, so the full matrix still lives in VRAM.
+// onCPU.ram: main.py streams the embedding matrix (never loads the full N x D), so the CPU peak is the
+// fit sample (~max_sequences x D) plus sklearn's full-SVD fit over it, plus the O(N) output
+// coordinates. The dominant term is the fit, which is N-independent: measured ~7.4 GiB at the largest
+// reachable D (2560 = esm2-650M on concat-Fv), inside the 16 GiB floor. Hence a floor + small size
+// margin, NOT the old 12x eager-load multiple.
+// onGPU stays size-scaled: the GPU path no longer holds the raw N x D on device (it streams
+// IncrementalPCA), but it does hold the reduced N x k_pca (k_pca <= 500) plus one
+// GPU_PCA_FIT_BATCH-clonotype batch, and cuML's UMAP graph over all N points — so VRAM still grows
+// with the input, and it copies the reduced matrix to the host for the pre-UMAP duplicate collapse.
 resourcesEmbeddings := func(builder) {
     size := f.size("input")
     return builder.resources({
