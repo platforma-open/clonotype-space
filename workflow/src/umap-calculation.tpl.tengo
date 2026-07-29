@@ -1,4 +1,4 @@
-//tengo:hash_override 16D7E7CE-5B0D-4D2C-A8BF-6909B926FA9D
+//tengo:hash_override BA521FD9-9224-4406-87E8-F80B3BDD6627
 
 self := import("@platforma-sdk/workflow-tengo:tpl")
 exec := import("@platforma-sdk/workflow-tengo:exec")
@@ -34,6 +34,13 @@ self.body(func(args) {
             arg("--umap-neighbors").arg(string(umap_neighbors)).
             arg("--umap-min-dist").arg(string(umap_min_dist)).
             arg("--n-jobs").argExpr("{system.cpu}")
+
+        // Embedding vector length D (pl7.app/embedding/length): lets the streaming loader resolve D
+        // without a scan. Undefined if the column lacks the annotation — main.py then infers it from
+        // the first row group.
+        if !is_undefined(args.dims) {
+            builder = builder.arg("--dims").arg(args.dims)
+        }
 
         // Embedding model: logged to the processing log for provenance. Undefined if the column
         // lacks the domain key — omit the flag rather than pass an empty string.

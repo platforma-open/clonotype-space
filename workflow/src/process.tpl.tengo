@@ -61,6 +61,7 @@ self.body(func(inputs) {
 			keyCol: inputs.keyCol,
 			dimCol: inputs.dimCol,
 			valueCol: inputs.valueCol,
+			dims: inputs.dims,
 			umap_neighbors: umap_neighbors,
 			umap_min_dist: umap_min_dist
 		}, {

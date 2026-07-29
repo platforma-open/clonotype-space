@@ -44,10 +44,11 @@ TestResourcesEmbeddings := func() {
     test.isEqual(16, _eval(spec.onCPU.cpu, F, 100 * _gib(1), 0))    // huge -> cap
     test.isEqual(8,  f.fallbackOf(spec.onCPU.cpu))
 
-    // onCPU.ram = 12*size + 8GiB bounded to [16, 128] GiB; fallback 64GiB
-    test.isEqual(_gib(16),  _eval(spec.onCPU.ram, F, 0, 0))          // floor
-    test.isEqual(_gib(128), _eval(spec.onCPU.ram, F, 100 * _gib(1), 0)) // cap
-    test.isEqual(_gib(64),  f.fallbackOf(spec.onCPU.ram))
+    // onCPU.ram = size + 12GiB bounded to [16, 48] GiB; fallback 20GiB (streaming: peak is fit-sample
+    // bounded, independent of N — no longer the old 12x eager-load multiple)
+    test.isEqual(_gib(16), _eval(spec.onCPU.ram, F, 0, 0))          // floor (0 + 12GiB -> floored to 16)
+    test.isEqual(_gib(48), _eval(spec.onCPU.ram, F, 100 * _gib(1), 0)) // cap
+    test.isEqual(_gib(20), f.fallbackOf(spec.onCPU.ram))
 
     // onGPU.cpu is a fixed core count (CPU-fallback safety on the GPU host).
     test.isEqual(4, spec.onGPU.cpu)
@@ -112,8 +113,8 @@ TestApplyRoutesByInputMode := func() {
     // embedding -> resourcesEmbeddings: onCPU.ram reacts to SIZE, ignores lineCount.
     emb := _mock()
     rf.apply(emb, {}, "embedding")
-    test.isEqual(_gib(128), _eval(emb.calls.spec.onCPU.ram, "input.parquet", 100 * _gib(1), 0)) // size -> cap
-    test.isEqual(_gib(16),  _eval(emb.calls.spec.onCPU.ram, "input.parquet", 0, 1000000000))    // lineCount ignored -> floor
+    test.isEqual(_gib(48), _eval(emb.calls.spec.onCPU.ram, "input.parquet", 100 * _gib(1), 0)) // size -> cap
+    test.isEqual(_gib(16), _eval(emb.calls.spec.onCPU.ram, "input.parquet", 0, 1000000000))    // lineCount ignored -> floor
 
     // sequence-features -> resourcesSeqFeatures: onCPU.ram reacts to LINECOUNT, ignores size.
     seq := _mock()
