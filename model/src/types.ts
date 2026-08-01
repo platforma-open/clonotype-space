@@ -51,10 +51,10 @@ export type BlockData = {
   cpu: number;
   mem: number;
   /**
-   * When false, the workflow skips the `.gpuMemory()` call and the software
-   * runs on CPU regardless of `gpuMemory`. When true, the workflow gates the
-   * request on `exec.hasGpu` so backends without GPU support fall back to CPU
-   * anyway.
+   * When false (the default), the workflow skips the `.gpuMemory()` call and
+   * the software runs on CPU regardless of `gpuMemory`. When true, the
+   * workflow gates the request on `exec.hasGpu` so backends without GPU
+   * support fall back to CPU anyway.
    */
   requireGpu: boolean;
   /**
