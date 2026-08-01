@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.model
 
+## 3.5.1
+
+### Patch Changes
+
+- 1002cad: Disable GPU requirement by default. New blocks now run on CPU unless "Require run on GPU" is checked in Performance Settings.
+
 ## 3.5.0
 
 ### Minor Changes
