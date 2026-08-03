@@ -29,12 +29,12 @@ resourcesEmbeddings := func(builder) {
         onCPU: {
             cpu: size.dividedBy(f.gib(4)).between(4, 16).staticFallback(8),
             ram: size.plus(f.gib(12)).between(f.gib(16), f.gib(48)).staticFallback(f.gib(20))
-        },
+        }/*,
         onGPU: {
             cpu: 4,
             ram: size.times(6).plus(f.gib(2)).between(f.gib(4), f.gib(64)).staticFallback(f.gib(16)),
             vram: size.times(8).plus(f.gib(2)).between(f.gib(6), f.gib(48)).staticFallback(f.gib(16))
-        }
+        }*/
     })
 }
 
@@ -45,12 +45,12 @@ resourcesSeqFeatures := func(builder) {
         onCPU: {
             cpu: size.dividedBy(250000).between(4, 16).staticFallback(8),
             ram: size.times(4096).plus(f.gib(8)).between(f.gib(16), f.gib(128)).staticFallback(f.gib(64))
-        },
+        }/*,
         onGPU: {
             cpu: 4,
             ram: size.times(1024).plus(f.gib(2)).between(f.gib(4), f.gib(64)).staticFallback(f.gib(16)),
             vram: size.times(512).plus(f.gib(2)).between(f.gib(6), f.gib(48)).staticFallback(f.gib(16))
-        }
+        }*/
     })
 }
 
