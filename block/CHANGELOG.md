@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space
 
+## 3.5.1
+
+### Patch Changes
+
+- 0777ffd: Disable GPU requirement by default. New blocks now run on CPU unless "Require run on GPU" is checked in Performance Settings.
+
 ## 3.5.0
 
 ### Minor Changes
