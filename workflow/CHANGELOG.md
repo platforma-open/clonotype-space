@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.workflow
 
+## 3.6.1
+
+### Patch Changes
+
+- 63052ff: Disable GPU by default on all levels
+
 ## 3.6.0
 
 ### Minor Changes
