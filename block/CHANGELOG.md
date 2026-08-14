@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space
 
+## 3.5.3
+
+### Patch Changes
+
+- 409cf45: Fix PATH resulolution for python environment
+
 ## 3.5.2
 
 ### Patch Changes

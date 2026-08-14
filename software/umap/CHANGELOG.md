@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.umap
 
+## 2.17.1
+
+### Patch Changes
+
+- 409cf45: Fix PATH resulolution for python environment
+
 ## 2.17.0
 
 ### Minor Changes
