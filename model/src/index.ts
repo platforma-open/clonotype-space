@@ -1,4 +1,5 @@
 import strings from "@milaboratories/strings";
+import { kind } from "@platforma-open/milaboratories.clonotype-space.kind";
 import type {
   DataInfo,
   InferOutputsType,
@@ -64,7 +65,35 @@ function getAnchoredClonotypeProps(
   ).filter((p) => p.spec.annotations?.["pl7.app/sequence/isAnnotation"] !== "true");
 }
 
-export const platforma = BlockModelV3.create(blockDataModel)
+export const platforma = BlockModelV3.create({ dataModel: blockDataModel, kind })
+
+  // Inverse of `init` — the same fields, projected back out for template export.
+  // `graphStateUMAP` and `alignmentModel` are view state and never cross the
+  // boundary: they say how one result was being looked at, not how to produce
+  // it. Both modes' fields go out as they stand; the off-mode ones are inert
+  // until the mode is switched back, and dropping them would lose a
+  // configuration the user actually set.
+  .templateParams((data) => ({
+    inputAnchor: data.inputAnchor,
+    embeddingRef: data.embeddingRef,
+
+    inputMode: data.inputMode,
+    sequencesRef: data.sequencesRef,
+    sequenceType: data.sequenceType,
+    umap_neighbors: data.umap_neighbors,
+    umap_min_dist: data.umap_min_dist,
+
+    sequenceLabels: data.sequenceLabels,
+    selectedEmbeddingLabel: data.selectedEmbeddingLabel,
+
+    directPerformanceSettings: data.directPerformanceSettings,
+    cpu: data.cpu,
+    mem: data.mem,
+    requireGpu: data.requireGpu,
+    gpuMemory: data.gpuMemory,
+
+    customBlockLabel: data.customBlockLabel,
+  }))
 
   .args<BlockArgs>((data) => {
     if (data.inputAnchor === undefined) throw new Error("Input dataset is required");
