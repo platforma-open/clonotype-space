@@ -1,5 +1,6 @@
 packages:
   - block
+  - kind
   - model
   - software/umap
   - test
@@ -8,19 +9,22 @@ packages:
 
 catalog:
   # SDK packages - EXACT VERSIONS (no ^ or ~)
-  "@milaboratories/ts-builder": 1.6.2
+  "@milaboratories/ts-builder": 1.7.0
   "@milaboratories/ts-configs": 1.4.0
   "@platforma-sdk/workflow-tengo": 6.8.2
-  "@platforma-sdk/model": 1.81.1
-  "@platforma-sdk/ui-vue": 1.81.1
-  "@platforma-sdk/tengo-builder": 4.0.22
+  "@platforma-sdk/model": 1.82.0
+  "@platforma-sdk/ui-vue": 1.82.1
+  "@platforma-sdk/tengo-builder": 4.0.23
   "@platforma-sdk/package-builder": 3.15.0
-  "@platforma-sdk/block-tools": 2.13.0
-  "@platforma-sdk/test": 1.81.3
+  "@platforma-sdk/block-kind": 1.1.0
+  "@platforma-sdk/block-tools": 2.14.3
+  "@platforma-sdk/test": 1.82.4
   "@milaboratories/helpers": 1.14.5
   "@milaboratories/graph-maker": 1.4.6
   "@milaboratories/multi-sequence-alignment": 1.47.16
   "@milaboratories/strings": 0.1.2
+  # pinned to the copy already in the graph, so the kind does not pull a second one
+  "es-toolkit": 1.43.0
 
   "@milaboratories/software-pframes-conv": 2.2.9
   "@platforma-open/milaboratories.runenv-python-3": 1.11.6

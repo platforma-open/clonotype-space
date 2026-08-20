@@ -26,6 +26,7 @@
   "devDependencies": {
     "@milaboratories/ts-builder": "catalog:",
     "@milaboratories/ts-configs": "catalog:",
+    "@platforma-open/milaboratories.clonotype-space.kind": "workspace:*",
     "@platforma-open/milaboratories.clonotype-space.model": "workspace:*",
     "@platforma-open/milaboratories.clonotype-space.ui": "workspace:*",
     "@platforma-open/milaboratories.clonotype-space.workflow": "workspace:*",

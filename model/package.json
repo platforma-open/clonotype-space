@@ -26,6 +26,7 @@
   "dependencies": {
     "@milaboratories/graph-maker": "catalog:",
     "@milaboratories/strings": "catalog:",
+    "@platforma-open/milaboratories.clonotype-space.kind": "workspace:*",
     "@platforma-sdk/model": "catalog:"
   },
   "devDependencies": {

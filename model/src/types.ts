@@ -1,16 +1,15 @@
 import type { GraphMakerState } from "@milaboratories/graph-maker";
+import type { InputMode, SequenceType } from "@platforma-open/milaboratories.clonotype-space.kind";
 import type {
   PlMultiSequenceAlignmentModel,
   PlRef,
   SUniversalPColumnId,
 } from "@platforma-sdk/model";
 
-export type SequenceType = "aminoacid" | "nucleotide";
-
-/**
- * UMAP feature source.
- */
-export type InputMode = "sequence-features" | "embedding";
+// `SequenceType` and `InputMode` are part of the block's init-params contract,
+// so they are declared by the kind and re-exported here: the model depends on
+// the kind, never the other way round.
+export type { InputMode, SequenceType } from "@platforma-open/milaboratories.clonotype-space.kind";
 
 /** Unified V3 data: persisted state, shaped on the UI's terms. */
 export type BlockData = {
