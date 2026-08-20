@@ -103,8 +103,14 @@ export const platforma = BlockModelV3.create({ dataModel: blockDataModel, kind }
     if (data.umap_min_dist < 0 || data.umap_min_dist > 1)
       throw new Error("UMAP min distance must be between 0 and 1");
     if (data.cpu === undefined) throw new Error("CPU is required");
+    if (data.cpu < 1) throw new Error("CPU count must be at least 1");
     if (data.mem === undefined) throw new Error("Memory is required");
+    if (data.mem < 1) throw new Error("Memory must be at least 1 GB");
     data.requireGpu = data.requireGpu ?? false;
+    // Only when a GPU is asked for: the field is disabled otherwise, so a stale
+    // value behind an unchecked box is not something to refuse a run over.
+    if (data.requireGpu && (data.gpuMemory === undefined || data.gpuMemory < 1))
+      throw new Error("GPU memory must be at least 1 GB when a GPU is required");
 
     // Shared by both modes. The lambda branches on inputMode and returns ONLY the active mode's
     // fields, so a stale off-mode value can't affect the run.
