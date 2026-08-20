@@ -49,9 +49,8 @@ function check<T>(is: Guard<T>, must: string): Check<T> {
 /** `Number.isInteger` already rejects non-numbers; this only adds the narrowing. */
 const isInteger: Guard<number> = (v): v is number => Number.isInteger(v);
 
-/** `umap_min_dist` is a fraction, so integrality is the wrong bar for it. */
-const isFiniteNumber: Guard<number> = (v): v is number =>
-  typeof v === "number" && Number.isFinite(v);
+/** `Number.isFinite` already rejects non-numbers; this only adds the narrowing. */
+const isNumber: Guard<number> = (v): v is number => Number.isFinite(v);
 
 function oneOf<T extends string>(...allowed: readonly T[]): Guard<T> {
   return (v): v is T => allowed.includes(v as T);
@@ -97,7 +96,7 @@ const CONTRACT = {
     "one of: aminoacid, nucleotide",
   ),
   umap_neighbors: check(isInteger, "an integer"),
-  umap_min_dist: check(isFiniteNumber, "a number"),
+  umap_min_dist: check(isNumber, "a number"),
 
   sequenceLabels: check(arrayOf(isString), "an array of strings"),
   selectedEmbeddingLabel: check(isString, "a string"),
