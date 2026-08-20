@@ -7,6 +7,7 @@ import {
   type SUniversalPColumnId,
 } from "@platforma-sdk/model";
 import { isBoolean, isString } from "es-toolkit";
+import { isArray, isNumber } from "es-toolkit/compat";
 import type { BlockParams, InputMode, SequenceType } from "./types";
 
 /**
@@ -46,18 +47,12 @@ function check<T>(is: Guard<T>, must: string): Check<T> {
   return { is, must };
 }
 
-/** `Number.isInteger` already rejects non-numbers; this only adds the narrowing. */
-const isInteger: Guard<number> = (v): v is number => Number.isInteger(v);
-
-/** `Number.isFinite` already rejects non-numbers; this only adds the narrowing. */
-const isNumber: Guard<number> = (v): v is number => Number.isFinite(v);
-
 function oneOf<T extends string>(...allowed: readonly T[]): Guard<T> {
   return (v): v is T => allowed.includes(v as T);
 }
 
 function arrayOf<T>(item: Guard<T>): Guard<T[]> {
-  return (v): v is T[] => Array.isArray(v) && v.every((e) => item(e));
+  return (v): v is T[] => isArray(v) && v.every((e) => item(e));
 }
 
 /**
@@ -95,17 +90,17 @@ const CONTRACT = {
     oneOf<SequenceType>("aminoacid", "nucleotide"),
     "one of: aminoacid, nucleotide",
   ),
-  umap_neighbors: check(isInteger, "an integer"),
+  umap_neighbors: check(isNumber, "a number"),
   umap_min_dist: check(isNumber, "a number"),
 
   sequenceLabels: check(arrayOf(isString), "an array of strings"),
   selectedEmbeddingLabel: check(isString, "a string"),
 
   directPerformanceSettings: check(isBoolean, "a boolean"),
-  cpu: check(isInteger, "an integer"),
-  mem: check(isInteger, "an integer"),
+  cpu: check(isNumber, "a number"),
+  mem: check(isNumber, "a number"),
   requireGpu: check(isBoolean, "a boolean"),
-  gpuMemory: check(isInteger, "an integer"),
+  gpuMemory: check(isNumber, "a number"),
 
   customBlockLabel: check(isString, "a string"),
 } satisfies { [K in keyof BlockParams]-?: Check<NonNullable<BlockParams[K]>> };
