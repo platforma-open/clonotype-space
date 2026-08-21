@@ -1,6 +1,6 @@
 {
   "name": "@platforma-open/milaboratories.clonotype-space.model",
-  "version": "3.6.0",
+  "version": "3.6.1",
   "private": true,
   "description": "Block model",
   "type": "module",
