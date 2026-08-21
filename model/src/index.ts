@@ -152,11 +152,15 @@ export const platforma = BlockModelV3.create({ dataModel: blockDataModel, kind }
       if (!spec) return undefined;
       for (const ax of spec.axesSpec) {
         if (ax.name === "pl7.app/variantKey") {
-          // peptide-extraction and synthetic-repertoire-profiler share this axis;
-          // the domain distinguishes them (see sequenceOptions for the same check).
-          return (ax.domain ?? {})["pl7.app/repertoire/extractionRunId"] !== undefined
-            ? "amplicon"
-            : "peptide";
+          // Three producers share this axis and only the run-id in its domain separates them
+          // (see sequenceOptions for the same check). import-vdj-data's bare antibody sets are
+          // the third; before this they fell through to "peptide", whose sequence matcher asks
+          // for pl7.app/sequence with feature "peptide" and therefore matched nothing, leaving
+          // the sequence dropdown empty with no way to tell why.
+          const domain = ax.domain ?? {};
+          if (domain["pl7.app/repertoire/extractionRunId"] !== undefined) return "amplicon";
+          if (domain["pl7.app/vdj/clonotypingRunId"] !== undefined) return "antibody_tcr";
+          return "peptide";
         }
         if (ax.name === "pl7.app/vdj/clonotypeKey" || ax.name === "pl7.app/vdj/scClonotypeKey")
           return "antibody_tcr";
@@ -174,8 +178,16 @@ export const platforma = BlockModelV3.create({ dataModel: blockDataModel, kind }
     const axis1Name = keyAxis?.name;
     const keyAxisDomain = keyAxis?.domain ?? {};
 
+    // A bare antibody set from import-vdj-data keys on pl7.app/variantKey like peptide and
+    // amplicon do, but stamps pl7.app/vdj/clonotypingRunId and emits pl7.app/vdj/sequence —
+    // so it belongs on the bulk matcher, not the peptide one. Its columns are on the record
+    // axis alone, which the positional axis match already accepts.
+    const isBareVdj =
+      axis1Name === "pl7.app/variantKey" &&
+      keyAxisDomain["pl7.app/vdj/clonotypingRunId"] !== undefined;
+
     const inputKind: "peptide" | "amplicon" | "singleCell" | "bulk" =
-      axis1Name === "pl7.app/variantKey"
+      axis1Name === "pl7.app/variantKey" && !isBareVdj
         ? keyAxisDomain["pl7.app/repertoire/extractionRunId"] !== undefined
           ? "amplicon"
           : "peptide"
