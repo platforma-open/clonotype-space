@@ -84,6 +84,24 @@ RANDOM_STATE = 42
 SVD_TARGET_VARIANCE = 0.95
 SVD_MAX_COMPONENTS = 500
 
+# Size-tiered component cap for the CPU k-mer path.
+_SEQ_SVD_CAP_TIERS = [  # (N-above, cap); first match wins, else SVD_MAX_COMPONENTS
+    (20_000_000, 100),
+    (10_000_000, 150),
+    (5_000_000, 200),
+    (2_000_000, 300),
+    (1_000_000, 400),
+]
+
+
+def _tiered_svd_cap(n, ceiling=SVD_MAX_COMPONENTS):
+    """Effective SVD-component cap for n sequences, given the small-input ceiling."""
+    for threshold, cap in _SEQ_SVD_CAP_TIERS:
+        if n > threshold:
+            return min(ceiling, cap)
+    return ceiling
+
+
 # Embedding mode: a vector whose centered-PCA residual norm falls below this is "degenerate" — it sits
 # at (≈) the dataset mean, so it has no reliable direction to normalize. Excluded from the UMAP fit and
 # given null coordinates.
@@ -942,6 +960,40 @@ def run_gpu_pipeline(args, sequences_all, umap_model):
     return umap_embed_all
 
 
+# Phase 2 worker state, populated once per process by _init_transform_worker(). Under the fork start
+# method the fitted UMAP/SVD models are inherited copy-on-write, so nothing large is pickled per task.
+_TRANSFORM_CTX = {}
+
+
+def _init_transform_worker(umap_model, svd_transformer, k_mer_size, alphabet, encoding,
+                           pos_kmer_max_len):
+    """Install the fitted models and encoding settings for this process."""
+    _TRANSFORM_CTX.update(umap_model=umap_model, svd_transformer=svd_transformer,
+                          k_mer_size=k_mer_size, alphabet=alphabet, encoding=encoding,
+                          pos_kmer_max_len=pos_kmer_max_len)
+
+
+def _transform_chunk(chunk_seqs):
+    """Encode -> SVD-project -> UMAP-transform one chunk of sequences.
+
+    A pure function of the chunk and the fitted models: umap-learn rebuilds its transform RNG from
+    `transform_seed` on every transform() call and keeps no state across calls, so a chunk's
+    coordinates do not depend on which process handled it, or in what order. Running the chunks in
+    parallel is therefore bit-identical to running them in sequence.
+    """
+    ctx = _TRANSFORM_CTX
+    if ctx['encoding'] == 'pos-kmer':
+        chunk_matrix = position_tagged_kmer_vectors(chunk_seqs, k=ctx['k_mer_size'],
+                                                    alphabet=ctx['alphabet'], verbose=False,
+                                                    max_len=ctx['pos_kmer_max_len'])
+    else:
+        # n_jobs=1: the chunk pool already owns every allocated core, so a nested k-mer pool would
+        # only oversubscribe them.
+        chunk_matrix = kmer_count_vectors(chunk_seqs, k=ctx['k_mer_size'], alphabet=ctx['alphabet'],
+                                          n_jobs=1, verbose=False)
+    return ctx['umap_model'].transform(ctx['svd_transformer'].transform(chunk_matrix))
+
+
 def run_cpu_pipeline(args, df_valid, sequences_all, umap_model):
     """
     Run the two-phase CPU pipeline:
@@ -986,11 +1038,16 @@ def run_cpu_pipeline(args, df_valid, sequences_all, umap_model):
     # --- Phase 1b: fit SVD ---
     start_time_svd = time.time()
     print("Running Truncated SVD...")
+    # The cap is chosen from the number of sequences to be transformed
+    svd_cap = _tiered_svd_cap(n_all)
+    if svd_cap < SVD_MAX_COMPONENTS:
+        print(f"Component cap: {n_all} sequences to transform -> capping SVD at {svd_cap} "
+              f"components (ceiling {SVD_MAX_COMPONENTS}).")
     svd_embed_fit, svd_transformer, n_components_used, explained_var_sum = compute_svd_embedding(
         matrix=matrix_fit,
         svd_backend=args.svd_backend,
         target_variance=SVD_TARGET_VARIANCE,
-        max_components=SVD_MAX_COMPONENTS,
+        max_components=svd_cap,
     )
     print(f"Truncated SVD completed in {time.time() - start_time_svd:.2f} seconds "
           f"({n_components_used} components, {explained_var_sum:.3f} variance).\n")
@@ -1015,32 +1072,53 @@ def run_cpu_pipeline(args, df_valid, sequences_all, umap_model):
     print(f"UMAP model fitting completed in {time.time() - start_time_umap_fit:.2f} seconds.\n")
 
     # --- Phase 2: transform ALL valid sequences in chunks ---
+    # Chunks are independent (see _transform_chunk), so they are spread across worker processes.
+    # This is where the CPU path's parallelism comes from: umap-learn itself runs single-threaded
+    # under a seed, and its own threading scales poorly even unseeded.
+    from concurrent.futures import ProcessPoolExecutor
+    from multiprocessing import get_all_start_methods, get_context
+
     n_chunks = (n_all + TRANSFORM_CHUNK_SIZE - 1) // TRANSFORM_CHUNK_SIZE
+    chunk_bounds = [(start, min(start + TRANSFORM_CHUNK_SIZE, n_all))
+                    for start in range(0, n_all, TRANSFORM_CHUNK_SIZE)]
+
+    n_workers = os.cpu_count() or 1 if args.n_jobs == -1 else max(1, args.n_jobs)
+    n_workers = min(n_workers, n_chunks)
+    # fork only: it inherits the fitted models copy-on-write. Under spawn each worker would re-import
+    # the module and unpickle the UMAP model (its raw fit data alone is ~100k x n_components floats),
+    # which costs more than it saves -- so fall back to one process instead.
+    use_pool = n_workers > 1 and 'fork' in get_all_start_methods()
+
     print(f"Transforming all {n_all} valid sequences in {n_chunks} chunks of "
-          f"{TRANSFORM_CHUNK_SIZE}...")
+          f"{TRANSFORM_CHUNK_SIZE}"
+          + (f" across {n_workers} worker processes..." if use_pool
+             else " in a single process..."))
     start_time_transform = time.time()
 
+    init_args = (umap_model, svd_transformer, args.k_mer_size, args.alphabet, args.encoding,
+                 pos_kmer_max_len)
+    _init_transform_worker(*init_args)   # also serves the sequential path below
+
+    def report(idx):
+        if (idx + 1) % 10 == 0 or idx == n_chunks - 1:
+            print(f"  Chunk {idx + 1}/{n_chunks} — {chunk_bounds[idx][1]}/{n_all} sequences "
+                  f"({time.time() - start_time_transform:.0f}s elapsed)")
+
     all_coords = []
-    for chunk_idx, chunk_start in enumerate(range(0, n_all, TRANSFORM_CHUNK_SIZE)):
-        chunk_end = min(chunk_start + TRANSFORM_CHUNK_SIZE, n_all)
-        chunk_seqs = sequences_all[chunk_start:chunk_end]
-
-        if args.encoding == 'pos-kmer':
-            chunk_matrix = position_tagged_kmer_vectors(chunk_seqs, k=args.k_mer_size,
-                                                        alphabet=args.alphabet, verbose=False,
-                                                        max_len=pos_kmer_max_len)
-        else:
-            chunk_matrix = kmer_count_vectors(chunk_seqs, k=args.k_mer_size,
-                                              alphabet=args.alphabet,
-                                              n_jobs=args.n_jobs, verbose=False)
-        chunk_svd = svd_transformer.transform(chunk_matrix)
-        chunk_umap = umap_model.transform(chunk_svd)
-        all_coords.append(chunk_umap)
-
-        if (chunk_idx + 1) % 10 == 0 or chunk_idx == n_chunks - 1:
-            elapsed = time.time() - start_time_transform
-            print(f"  Chunk {chunk_idx + 1}/{n_chunks} — {chunk_end}/{n_all} sequences "
-                  f"({elapsed:.0f}s elapsed)")
+    if use_pool:
+        with ProcessPoolExecutor(max_workers=n_workers, mp_context=get_context('fork'),
+                                 initializer=_init_transform_worker,
+                                 initargs=init_args) as executor:
+            # map() yields in submission order, so all_coords stays chunk-ordered.
+            for chunk_idx, chunk_coords in enumerate(executor.map(
+                    _transform_chunk,
+                    (sequences_all[start:end] for start, end in chunk_bounds))):
+                all_coords.append(chunk_coords)
+                report(chunk_idx)
+    else:
+        for chunk_idx, (start, end) in enumerate(chunk_bounds):
+            all_coords.append(_transform_chunk(sequences_all[start:end]))
+            report(chunk_idx)
 
     print(f"Transform completed in {time.time() - start_time_transform:.2f} seconds.\n")
     return np.vstack(all_coords)
