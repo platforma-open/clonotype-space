@@ -318,7 +318,11 @@ watch(
       :status-text="{ noPframe: { title: strings.callToActions.configureSettingsAndRun } }"
     >
       <template #titleLineSlot>
-        <PlBtnGhost icon="dna" @click.stop="() => (multipleSequenceAlignmentOpen = true)">
+        <PlBtnGhost
+          v-if="!app.model.outputs.isPeptide"
+          icon="dna"
+          @click.stop="() => (multipleSequenceAlignmentOpen = true)"
+        >
           {{ strings.titles.multipleSequenceAlignment }}
         </PlBtnGhost>
         <PlBtnGhost @click.stop="() => (umapLogOpen = true)">
