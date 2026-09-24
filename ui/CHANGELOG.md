@@ -1,5 +1,16 @@
 # @platforma-open/milaboratories.clonotype-space.ui
 
+## 3.5.0
+
+### Minor Changes
+
+- 62c8bfe: Hide the multiple sequence alignment entry point for peptide datasets, including the table cell button.
+
+### Patch Changes
+
+- Updated dependencies [62c8bfe]
+  - @platforma-open/milaboratories.clonotype-space.model@3.7.0
+
 ## 3.4.4
 
 ### Patch Changes
