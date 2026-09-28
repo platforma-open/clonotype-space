@@ -16,8 +16,8 @@ catalogs:
       specifier: 1.14.5
       version: 1.14.5
     '@milaboratories/multi-sequence-alignment':
-      specifier: 1.47.29
-      version: 1.47.29
+      specifier: 1.47.30
+      version: 1.47.30
     '@milaboratories/strings':
       specifier: 0.1.2
       version: 0.1.2
@@ -242,7 +242,7 @@ importers:
         version: 1.14.5
       '@milaboratories/multi-sequence-alignment':
         specifier: 'catalog:'
-        version: 1.47.29(@milaboratories/pl-model-common@1.51.0)(@platforma-sdk/model@1.84.3)(@platforma-sdk/ui-vue@1.84.3(@bytecodealliance/preview2-shim@0.17.8)(typescript@5.9.3))(d3-dispatch@3.0.1)(d3-path@3.1.0)(d3-scale-chromatic@3.1.0)(typescript@5.9.3)
+        version: 1.47.30(@milaboratories/pl-model-common@1.51.0)(@platforma-sdk/model@1.84.3)(@platforma-sdk/ui-vue@1.84.3(@bytecodealliance/preview2-shim@0.17.8)(typescript@5.9.3))(d3-dispatch@3.0.1)(d3-path@3.1.0)(d3-scale-chromatic@3.1.0)(typescript@5.9.3)
       '@milaboratories/strings':
         specifier: 'catalog:'
         version: 0.1.2
@@ -1189,8 +1189,8 @@ packages:
   '@milaboratories/miplots4@1.6.0':
     resolution: {integrity: sha512-wJzY+1y5exxr8QC9ekZPd5W6x5oVaghdUlpB7Wc036h/4XLQZ0MzotU5FfBEtTrnEgnXgRLzgl51wGbGnlk3PA==}
 
-  '@milaboratories/multi-sequence-alignment@1.47.29':
-    resolution: {integrity: sha512-Ttqr2Lff+Nr4Gdn9jhzyuDvGuI6xUcRMh72CtcR1xLEMQUakYKAcaTkIsIB4/zmbvqUyR1n+q18tt48KejGz5Q==}
+  '@milaboratories/multi-sequence-alignment@1.47.30':
+    resolution: {integrity: sha512-0EwAHwMUh7FvNbvPM2KiLioKvIx9KjEfoENVLbU61DKysk5npQ/omP+wDA4C7DJ656Vj/h00hxR8hqsjN3paNg==}
     peerDependencies:
       '@platforma-sdk/model': 1.84.0
       '@platforma-sdk/ui-vue': 1.84.0
@@ -8068,7 +8068,7 @@ snapshots:
       - d3-scale-chromatic
       - supports-color
 
-  '@milaboratories/multi-sequence-alignment@1.47.29(@milaboratories/pl-model-common@1.51.0)(@platforma-sdk/model@1.84.3)(@platforma-sdk/ui-vue@1.84.3(@bytecodealliance/preview2-shim@0.17.8)(typescript@5.9.3))(d3-dispatch@3.0.1)(d3-path@3.1.0)(d3-scale-chromatic@3.1.0)(typescript@5.9.3)':
+  '@milaboratories/multi-sequence-alignment@1.47.30(@milaboratories/pl-model-common@1.51.0)(@platforma-sdk/model@1.84.3)(@platforma-sdk/ui-vue@1.84.3(@bytecodealliance/preview2-shim@0.17.8)(typescript@5.9.3))(d3-dispatch@3.0.1)(d3-path@3.1.0)(d3-scale-chromatic@3.1.0)(typescript@5.9.3)':
     dependencies:
       '@milaboratories/biowasm-tools': 2.0.3
       '@milaboratories/miplots4': 1.6.0(d3-dispatch@3.0.1)(d3-path@3.1.0)(d3-scale-chromatic@3.1.0)
