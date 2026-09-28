@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.model
 
+## 3.7.1
+
+### Patch Changes
+
+- c6851a6: update sdk
+
 ## 3.7.0
 
 ### Minor Changes

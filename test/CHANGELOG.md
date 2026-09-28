@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.test
 
+## 2.3.1
+
+### Patch Changes
+
+- c6851a6: update sdk
+
 ## 2.3.0
 
 ### Minor Changes

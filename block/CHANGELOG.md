@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space
 
+## 3.8.1
+
+### Patch Changes
+
+- c6851a6: update sdk
+
 ## 3.8.0
 
 ### Minor Changes

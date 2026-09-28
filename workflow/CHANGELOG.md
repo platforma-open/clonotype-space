@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.workflow
 
+## 3.6.5
+
+### Patch Changes
+
+- c6851a6: update sdk
+
 ## 3.6.4
 
 ### Patch Changes
