@@ -1,5 +1,13 @@
 # @platforma-open/milaboratories.clonotype-space.ui
 
+## 3.5.2
+
+### Patch Changes
+
+- c6dd8ee: update sdk
+- Updated dependencies [c6dd8ee]
+  - @platforma-open/milaboratories.clonotype-space.model@3.7.2
+
 ## 3.5.1
 
 ### Patch Changes
