@@ -17,6 +17,7 @@ pframes := import("@platforma-sdk/workflow-tengo:pframes")
 pSpec := import("@platforma-sdk/workflow-tengo:pframes.spec")
 xsv := import("@platforma-sdk/workflow-tengo:pframes.xsv")
 umapConv := import(":pf-umap-conv")
+json := import("json")
 
 umapCalculationTpl := assets.importTemplate(":umap-calculation")
 minPeptideLengthTpl := assets.importTemplate(":min-peptide-length")
@@ -45,6 +46,16 @@ self.body(func(inputs) {
 
 	// Spec is plain JSON, available now (PColumnBundle await covered specs).
 	datasetSpec := columns.getSpec(inputAnchor)
+
+	// Optional subset: only its clonotypes are laid out. The trace roots in the filter so
+	// downstream labels name it.
+	subset := inputs.subset
+	filterColumn := undefined
+	traceSpec := datasetSpec
+	if !is_undefined(subset) {
+		filterColumn = columns.getColumn(json.decode(subset))
+		traceSpec = filterColumn.spec
+	}
 
 	// Embedding model: undefined in sequence mode.
 	embeddingModel := undefined
@@ -100,10 +111,16 @@ self.body(func(inputs) {
 		if isPeptide {
 			peptideLenCols := columns.getColumns("peptideSequenceLength")
 			if len(peptideLenCols) > 0 {
-				minLenResult := render.create(minPeptideLengthTpl, {
+				minLenInputs := {
 					spec: peptideLenCols[0].spec,
 					data: peptideLenCols[0].data
-				})
+				}
+				// Only for a subset run, so a full-data run keeps exactly its previous inputs
+				if !is_undefined(filterColumn) {
+					minLenInputs.filterSpec = filterColumn.spec
+					minLenInputs.filterData = filterColumn.data
+				}
+				minLenResult := render.create(minPeptideLengthTpl, minLenInputs)
 				minPeptideLength = minLenResult.output("minLength")
 			} else {
 				ll.panic("Peptide input is missing required pl7.app/sequenceLength column")
@@ -112,11 +129,25 @@ self.body(func(inputs) {
 
 		// Build input TSV with clonotype id and selected sequence columns.
 		// Column data is a deferred reference here — the TSV builder consumes it lazily.
-		umapTable := pframes.tsvFileBuilder()
+		umapTable := undefined
+		addSequence := undefined
+		if is_undefined(filterColumn) {
+			umapTable = pframes.tsvFileBuilder()
+			addSequence = func(nr, seq) { umapTable.add(seq, {header: "sequence_" + string(nr)}) }
+		} else {
+			// Every column is its own filtered primary, full-joined: a clonotype may lack some sequences
+			umapTable = pframes.tableBuilder("tsv").setJoinMode("full")
+			addSequence = func(nr, seq) {
+				umapTable.addPrimary("col" + string(nr), {
+					__isPrimaryRef: "v1",
+					column: seq,
+					filter: filterColumn
+				}, {header: "sequence_" + string(nr)})
+			}
+		}
 		umapTable.setAxisHeader(datasetSpec.axesSpec[1].name, "clonotypeKey")
 		for nr, seqRef in sequencesRef {
-			seq := columns.getColumn(seqRef)
-			umapTable.add(seq, {header: "sequence_" + string(nr)})
+			addSequence(nr, columns.getColumn(seqRef))
 		}
 		umapTable.mem("16GiB") // TODO: make this dynamic on input size
 		umapTable.cpu(1)
@@ -152,7 +183,7 @@ self.body(func(inputs) {
 	umapPf := xsv.importFile(
 		umapTsVFile,
 		"tsv",
-		umapConv.getColumns(datasetSpec, blockId, embeddingModel),
+		umapConv.getColumns(datasetSpec, blockId, embeddingModel, subset),
 		{
 			splitDataAndSpec: true,
 			cpu: 1,
@@ -160,7 +191,7 @@ self.body(func(inputs) {
 		})
 
 	traceLabel := customBlockLabel || defaultBlockLabel
-	trace := pSpec.makeTrace(datasetSpec, {
+	trace := pSpec.makeTrace(traceSpec, {
 		type: "milaboratories.clonotype-space",
 		importance: 20,
 		label: traceLabel

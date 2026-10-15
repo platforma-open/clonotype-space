@@ -22,6 +22,8 @@ export type InputMode = "sequence-features" | "embedding";
 export type BlockParams = {
   // Input wiring — PlRefs a template engine fills from an earlier entry's output.
   inputAnchor?: PlRef;
+  /** A subset column (`pl7.app/isSubset`) of the dataset; only its clonotypes are laid out. */
+  filterRef?: PlRef;
   embeddingRef?: PlRef;
 
   // Analysis configuration — the recipe a template exists to reproduce.

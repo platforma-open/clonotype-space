@@ -45,6 +45,7 @@ export const blockDataModel = new DataModelBuilder({ kind })
   .init(({ params }) => ({
     customBlockLabel: params?.customBlockLabel ?? "",
     inputAnchor: params?.inputAnchor,
+    filterRef: params?.filterRef,
     inputMode: params?.inputMode ?? "sequence-features", // embedding mode is opt-in
     sequencesRef: params?.sequencesRef ?? [],
     sequenceLabels: params?.sequenceLabels ?? [],
