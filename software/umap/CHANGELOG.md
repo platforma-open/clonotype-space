@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.umap
 
+## 2.18.1
+
+### Patch Changes
+
+- f83ff98: Fix python run env, SDK upgrade
+
 ## 2.18.0
 
 ### Minor Changes
