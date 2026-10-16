@@ -79,6 +79,7 @@ const REF = "a reference to another block's output";
  */
 const CONTRACT = {
   inputAnchor: check(isPlRef, REF),
+  filterRef: check(isPlRef, "a reference to a subset column"),
   embeddingRef: check(isPlRef, REF),
 
   inputMode: check(
