@@ -331,19 +331,37 @@ export const platforma = BlockModelV3.create({ dataModel: blockDataModel, kind }
     const datasetSpec = ctx.resultPool.getPColumnSpecByRef(ref);
     const cloneAxis = datasetSpec?.axesSpec?.[1];
     if (cloneAxis === undefined) return undefined;
+    // Full-data embeddings always; a subset's embedding only when that subset is picked here
+    const subset =
+      ctx.data.filterRef &&
+      createGlobalPObjectId(ctx.data.filterRef.blockId, ctx.data.filterRef.name);
     const sameClonotypeAxis = (embAxis?: { name?: string; domain?: Record<string, string> }) => {
       if (embAxis === undefined || embAxis.name !== cloneAxis.name) return false;
       const datasetDomain = cloneAxis.domain ?? {};
       const embDomain = embAxis.domain ?? {};
       return Object.keys(datasetDomain).every((k) => embDomain[k] === datasetDomain[k]);
     };
-    const options = ctx.resultPool.getOptions(
+    const allOptions = ctx.resultPool.getOptions(
       (spec) =>
         isPColumnSpec(spec) &&
         spec.name === "pl7.app/embedding" &&
+        (spec.domain?.["pl7.app/inputSubset"] ?? subset) === subset &&
         sameClonotypeAxis(spec.axesSpec?.[0]),
       { label: { includeNativeLabel: true } },
     );
+    // A full-data embedding is hidden when the subset has its own of the same model and sequence
+    const described = allOptions.map((o) => {
+      const {
+        "pl7.app/inputSubset": stamp,
+        "pl7.app/blockId": _b,
+        ...rest
+      } = ctx.resultPool.getPColumnSpecByRef(o.ref)?.domain ?? {};
+      return { o, stamp, key: JSON.stringify(Object.entries(rest).sort()) };
+    });
+    const subsetKeys = new Set(described.filter((d) => d.stamp !== undefined).map((d) => d.key));
+    const options = described
+      .filter((d) => d.stamp !== undefined || !subsetKeys.has(d.key))
+      .map((d) => d.o);
     return options.map((o) => {
       const spec = ctx.resultPool.getPColumnSpecByRef(o.ref);
       return {
