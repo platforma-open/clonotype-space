@@ -12,6 +12,7 @@ import { PlMultiSequenceAlignment } from "@milaboratories/multi-sequence-alignme
 import strings from "@milaboratories/strings";
 import {
   listToOptions,
+  usePlugin,
   PlAccordionSection,
   PlAlert,
   PlBlockPage,
@@ -28,7 +29,7 @@ import {
 } from "@platforma-sdk/ui-vue";
 
 import type { PredefinedGraphOption } from "@milaboratories/graph-maker";
-import { GraphMaker } from "@milaboratories/graph-maker";
+import { GraphMakerPlugin } from "@milaboratories/graph-maker";
 import { asyncComputed } from "@vueuse/core";
 import { computed, ref, watch } from "vue";
 
@@ -236,10 +237,13 @@ const isEmpty = asyncComputed(async () => {
   );
 });
 
-const selection = ref<PlSelectionModel>({
-  axesSpec: [],
-  selectedKeys: [],
-});
+// The chart's selection lives in the plugin's data. Read it through the same
+// plugin model the chart uses, rather than holding a second copy here — the
+// plugin component owns the binding, and the alignment only observes it.
+const umapPlugin = usePlugin(app.plugins.umap.handle);
+const selection = computed<PlSelectionModel>(
+  () => umapPlugin.model.data.selection ?? { axesSpec: [], selectedKeys: [] },
+);
 
 const multipleSequenceAlignmentOpen = ref(false);
 const umapLogOpen = ref(false);
@@ -301,7 +305,7 @@ watch(
   () => app.model.outputs.isRunning,
   (isRunning, wasRunning) => {
     if (isRunning && !wasRunning) {
-      app.model.data.graphStateUMAP.currentTab = null;
+      umapPlugin.model.data.state = { ...umapPlugin.model.data.state, currentTab: null };
     }
   },
 );
@@ -309,11 +313,8 @@ watch(
 
 <template>
   <PlBlockPage no-body-gutters>
-    <GraphMaker
-      v-model="app.model.data.graphStateUMAP"
-      v-model:selection="selection"
-      chartType="scatterplot-umap"
-      :p-frame="app.model.outputs.umapPf"
+    <GraphMakerPlugin
+      :handle="app.plugins.umap.handle"
       :default-options="defaultOptions"
       :status-text="{ noPframe: { title: strings.callToActions.configureSettingsAndRun } }"
     >
@@ -564,7 +565,7 @@ watch(
           different dataset.
         </PlAlert>
       </template>
-    </GraphMaker>
+    </GraphMakerPlugin>
     <PlSlideModal
       v-model="multipleSequenceAlignmentOpen"
       width="100%"

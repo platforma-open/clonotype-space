@@ -6,11 +6,11 @@ import type {
   PColumn,
   PColumnIdAndSpec,
   PColumnValues,
-  PFrameHandle,
   RenderCtxBase,
   TreeNodeAccessor,
 } from "@platforma-sdk/model";
 import { BlockModelV3, createPFrameForGraphs, isPColumnSpec } from "@platforma-sdk/model";
+import { graphMakerPlugin } from "@milaboratories/graph-maker/plugin";
 import { blockDataModel } from "./dataModel";
 import { getDefaultBlockLabel } from "./label";
 import type { BlockArgs, BlockData } from "./types";
@@ -65,7 +65,28 @@ function getAnchoredClonotypeProps(
   ).filter((p) => p.spec.annotations?.["pl7.app/sequence/isAnnotation"] !== "true");
 }
 
+// The UMAP chart is a graph-maker plugin instance: it owns its own view state
+// and builds its own PFrame from the columns handed to it as anchors.
+const umapPlugin = graphMakerPlugin.create({
+  pluginId: "umap",
+  config: {
+    chartType: "scatterplot-umap",
+    initialTitle: "Sequence Space UMAP",
+    initialTemplate: "dots",
+    initialState: {
+      currentTab: "settings",
+      layersSettings: { dots: { dotFill: "#99E099" } },
+    },
+  },
+});
+
 export const platforma = BlockModelV3.create({ dataModel: blockDataModel, kind })
+
+  // The workflow's UMAP columns are the anchors; the plugin discovers what else
+  // in the project binds to them, and brings their labels and linkers.
+  .plugin(umapPlugin, {
+    anchorColumns: (ctx) => ctx.outputs?.resolve("umapPf")?.getPColumns(),
+  })
 
   // Inverse of `init` — the same fields, projected back out for template export.
   // `graphStateUMAP` and `alignmentModel` are view state and never cross the
@@ -324,12 +345,6 @@ export const platforma = BlockModelV3.create({ dataModel: blockDataModel, kind }
     const props = getAnchoredClonotypeProps(ctx);
     if (!props) return undefined;
     return createPFrameForGraphs(ctx, props);
-  })
-
-  .outputWithStatus("umapPf", (ctx): PFrameHandle | undefined => {
-    const pCols = ctx.outputs?.resolve("umapPf")?.getPColumns();
-    if (pCols === undefined) return undefined;
-    return createPFrameForGraphs(ctx, pCols);
   })
 
   .output("umapOutput", (ctx) => ctx.outputs?.resolve("umapOutput")?.getLogHandle())
