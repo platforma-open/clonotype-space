@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.test
 
+## 2.3.2
+
+### Patch Changes
+
+- 3242a40: npm update
+
 ## 2.3.1
 
 ### Patch Changes

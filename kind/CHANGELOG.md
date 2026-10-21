@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.kind
 
+## 1.1.1
+
+### Patch Changes
+
+- 3242a40: npm update
+
 ## 1.1.0
 
 ### Minor Changes
