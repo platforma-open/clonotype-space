@@ -71,6 +71,8 @@ import numpy as np
 import polars as pl
 from scipy import sparse
 
+from hash_dedup import hash_groups, identical_row_groups, row_hashes
+
 
 # ============================================================================
 # Constants
@@ -1136,11 +1138,11 @@ def run_cpu_pipeline(args, df_valid, sequences_all, umap_model):
 # Memory handling for large inputs: the full N x D matrix is NEVER materialized. The CPU path
 # STREAMS the long-format parquet twice — once to collect a bounded, seeded fit sample
 # (~max_sequences x D), once to project every clonotype through the fitted PCA/UMAP in batches — so
-# its peak memory is bounded by the fit sample, independent of N. The GPU path streams through cuML
-# IncrementalPCA (partial_fit on ~100k-clonotype batches), so the raw N x D matrix is never resident on
-# the device either; there only the reduced N x k array and the fit-on-all UMAP scale with N. The
-# pre-PCA exact-duplicate dedup was dropped to avoid memory scaling; the GPU path instead collapses
-# exact duplicates AFTER PCA, on the small reduced vectors, right before the UMAP fit.
+# its peak memory is bounded by the fit sample plus the duplicate bookkeeping: ~16 bytes per clonotype
+# (briefly ~32 while the fingerprints are grouped) and the raw rows of duplicated vectors whose copies are
+# still ahead in the stream. The GPU path streams through cuML IncrementalPCA (partial_fit on
+# ~100k-clonotype batches), so the raw N x D matrix is never resident on the device either; there only
+# the reduced N x k array and the fit-on-all UMAP scale with N.
 
 # Fixed, data-derived batch size for the streaming reads: 4M long-format rows per pyarrow batch.
 # Deliberately NOT scaled by the allocated memory — a fixed batch keeps assembly deterministic and the
@@ -1294,17 +1296,34 @@ def _transform_batch_cpu(pca, k, umap_model, n_components, X_batch):
     return coords, int((~valid).sum())
 
 
+def _collapse_identical(X):
+    """Group the byte-identical rows of X (N, k). Returns (rep_rows, rep_of):
+      rep_rows  (M,)  row index of each group's first row (ascending) -- X[rep_rows] are the unique vectors
+      rep_of    (N,)  index (0..M-1) into rep_rows of every row's group"""
+    # rep points to original row numbers 
+    rep = identical_row_groups(X)                        # rep[i] = lowest row identical to row i
+    # A row is a representative when it points to itself
+    rep_rows = np.flatnonzero(rep == np.arange(rep.shape[0]))
+    # Rename representatives
+    pos = np.empty(rep.shape[0], dtype=np.int64)
+    pos[rep_rows] = np.arange(rep_rows.shape[0])
+    return rep_rows, pos[rep]
+
+
 def _run_embedding_cpu(pf, D, n_clonotypes, min_required, args, output_path):
     """CPU two-pass streaming path. Pass A: stream once, gather a seeded fit sample bounded to
-    ~max_sequences x D. Fit PCA + UMAP on it. Pass B: stream again, project every clonotype through the
-    fitted models in batches, accumulating only the 2-D coordinates. Never holds the full N x D matrix.
-    Returns (keys, coords, n_degenerate, k_pca); raises _EmptyEmbeddingResult when there are too few
-    non-degenerate vectors (empty output already written)."""
+    ~max_sequences x D and fingerprint every clonotype. Fit PCA, collapse identical fit vectors, fit
+    UMAP on the unique ones. When that fit covered every clonotype, its layout IS the output (copies
+    take their representative's point). Otherwise pass B: stream again and project every distinct vector
+    once through the fitted models; copies -- in the same batch or a later one -- reuse its coordinates.
+    Never holds the full N x D matrix. Returns (keys, coords, n_degenerate, k_pca); raises
+    _EmptyEmbeddingResult when there are too few unique non-degenerate vectors (empty output written)."""
     fit_size = args.max_sequences if (args.max_sequences and args.max_sequences > 0) else n_clonotypes
     fit_size = min(fit_size, n_clonotypes)
 
     # --- Pass A: gather the seeded fit sample. choice-over-N is the same sampling algorithm as the
-    #     pre-streaming _fit_sample; collected in stream order via a global row counter. ---
+    #     pre-streaming _fit_sample; collected in stream order via a global row counter. Keys and row
+    #     fingerprints are recorded for every clonotype on the same read. ---
     rng = np.random.default_rng(RANDOM_STATE)
     if fit_size < n_clonotypes:
         sel = np.sort(rng.choice(n_clonotypes, size=fit_size, replace=False))
@@ -1316,9 +1335,13 @@ def _run_embedding_cpu(pf, D, n_clonotypes, min_required, args, output_path):
         print(f"Fit sample: {n_clonotypes} clonotypes <= --max-sequences; fitting on all.")
 
     X_fit = np.empty((fit_size, D), dtype=np.float32)
+    keys = np.empty(n_clonotypes, dtype=object)
+    hashes = np.empty(n_clonotypes, dtype=np.uint64)
     g = 0
-    for _, mat in _stream_clonotypes(pf, args.key_col, args.dim_col, args.value_col, D):
+    for ks, mat in _stream_clonotypes(pf, args.key_col, args.dim_col, args.value_col, D):
         b = mat.shape[0]
+        keys[g:g + b] = ks
+        hashes[g:g + b] = row_hashes(mat)
         lo = int(np.searchsorted(sel, g))
         hi = int(np.searchsorted(sel, g + b))
         if hi > lo:
@@ -1333,37 +1356,98 @@ def _run_embedding_cpu(pf, D, n_clonotypes, min_required, args, output_path):
     print(f"Centered PCA: {D} → {k_pca} components (95% variance, cap {SVD_MAX_COMPONENTS}) "
           f"in {time.time() - start_pca:.2f}s.")
 
-    # --- Degenerate check on the fit sample; fit UMAP on its non-degenerate rows ---
-    valid_fit = np.linalg.norm(Xr_fit, axis=1) > DEGENERATE_NORM_THRESHOLD
-    n_valid_fit = int(valid_fit.sum())
-    if n_valid_fit < min_required:
-        print(f"Warning: Not enough non-degenerate vectors in the fit sample for UMAP "
-              f"(required {min_required}, valid {n_valid_fit}) — writing empty output.")
+    # --- Collapse identical embeddings, compared on the RAW vectors so different embeddings are never
+    #     merged, then drop degenerate ones. UMAP is fit on the unique non-degenerate vectors. ---
+    rep_rows, rep_of = _collapse_identical(X_fit)
+    del X_fit
+    Xr_u = Xr_fit[rep_rows]
+    del Xr_fit
+    if rep_rows.shape[0] < fit_size:
+        print(f"Collapsing {fit_size} → {rep_rows.shape[0]} unique fit-sample vectors "
+              f"({fit_size - rep_rows.shape[0]} identical copies) before the UMAP fit.")
+    valid_u = np.linalg.norm(Xr_u, axis=1) > DEGENERATE_NORM_THRESHOLD
+    n_unique_fit = int(valid_u.sum())
+    if n_unique_fit < min_required:
+        print(f"Warning: Not enough unique non-degenerate vectors in the fit sample for UMAP "
+              f"(required {min_required}, unique {n_unique_fit}) — writing empty output.")
         create_empty_umap_output(KEY_COL, args.umap_components, output_path)
         create_empty_skipped_summary(args.output_dir,
-                                     "UMAP analysis skipped due to insufficient non-degenerate vectors.")
+                                     "UMAP analysis skipped due to insufficient unique vectors.")
         raise _EmptyEmbeddingResult()
 
     umap_model, _ = create_umap_model('sklearn', args.umap_components, args.umap_neighbors,
                                       args.umap_min_dist)
-    print(f"Fitting UMAP on {n_valid_fit} non-degenerate fit-sample vectors "
+    print(f"Fitting UMAP on {n_unique_fit} unique non-degenerate fit-sample vectors "
           f"(L2-normalized, Euclidean ≡ cosine)...")
     start_umap = time.time()
-    _fit_umap_cpu(umap_model, l2_normalize(Xr_fit[valid_fit]))
+    _fit_umap_cpu(umap_model, l2_normalize(Xr_u[valid_u]))
     print(f"UMAP fit completed in {time.time() - start_umap:.2f}s.")
 
-    # --- Pass B: project every clonotype in batches (out-of-sample transform) ---
+    # --- Every clonotype took part in the fit: the fitted layout is the output, no transform pass. ---
+    if fit_size == n_clonotypes and n_unique_fit <= UMAP_FIT_MAX_SAMPLE_SIZE:
+        coords_u = np.full((rep_rows.shape[0], args.umap_components), np.nan, dtype=np.float64)
+        coords_u[valid_u] = umap_model.embedding_
+        coords = coords_u[rep_of]                        # copies take their representative's point
+        n_degenerate = int(np.isnan(coords[:, 0]).sum())
+        print(f"All {n_clonotypes} clonotypes were in the UMAP fit; using the fitted layout "
+              f"(degenerate-excluded={n_degenerate}).")
+        return keys, coords, n_degenerate, k_pca
+    del rep_rows, rep_of, Xr_u, valid_u
+
+    # --- Pass B: project every DISTINCT vector once (out-of-sample transform). A clonotype's candidate
+    #     representative is the first clonotype with its fingerprint; a row byte-identical to a vector
+    #     already seen under that representative is a copy and reuses its coordinates, anything else --
+    #     including a fingerprint collision -- is transformed. Copies are never transformed themselves:
+    #     umap-learn's transform() output depends on the other rows in the call, so copies placed in
+    #     different batches would land apart. Transformed rows whose candidate copies continue past the
+    #     batch are kept (raw row + coordinates) until the last one has streamed past. ---
+    # rep[i]: stream index of clonotype i's candidate representative (i itself for a first or unique one).
+    # last[j]: stream index of the last clonotype whose candidate is j, i.e. when j's stored row can go.
+    rep, last = hash_groups(hashes)
+    del hashes
+    stored = {}                                          # representative -> [(raw uint32 row, coords), ...]
     start_tr = time.time()
-    keys_parts, coords_parts, n_degenerate = [], [], 0
-    for ks, mat in _stream_clonotypes(pf, args.key_col, args.dim_col, args.value_col, D):
-        c, nd = _transform_batch_cpu(pca, k_pca, umap_model, args.umap_components, mat)
-        keys_parts.append(ks)
-        coords_parts.append(c)
-        n_degenerate += nd
-    keys = np.concatenate(keys_parts) if keys_parts else np.array([], dtype=object)
-    coords = np.vstack(coords_parts) if coords_parts else np.empty((0, args.umap_components))
-    print(f"Transformed all {keys.shape[0]} clonotypes in {time.time() - start_tr:.2f}s "
-          f"(degenerate-excluded={n_degenerate}).")
+    coords = np.empty((n_clonotypes, args.umap_components), dtype=np.float64)
+    n_reused, peak_held = 0, 0
+    g = 0                                                # stream index of the batch's first clonotype
+    for _, mat in _stream_clonotypes(pf, args.key_col, args.dim_col, args.value_col, D):
+        b = mat.shape[0]
+        U = mat.view(np.uint32)                          # same bytes as integers: == is an exact byte check
+        r = rep[g:g + b]                                 # each row's candidate, as a stream index
+        out = np.full((b, args.umap_components), np.nan, dtype=np.float64)   # this batch's coordinates
+        todo = np.ones(b, dtype=bool)                    # rows that still need a transform
+        # Copies of a representative in this batch: rows whose candidate is another row (r != own index)
+        # that sits in this batch (r >= g). Byte-identical ones are real copies, filled after the transform.
+        cand = np.flatnonzero((r != np.arange(g, g + b)) & (r >= g))
+        in_batch = cand[(U[cand] == U[r[cand] - g]).all(axis=1)]
+        todo[in_batch] = False
+        # Copies of a representative from an earlier batch: compared with the vectors stored under it
+        # (just the representative, unless a fingerprint collision added more).
+        for i in np.flatnonzero(r < g):
+            for raw, xy in stored[r[i]]:
+                if np.array_equal(raw, U[i]):
+                    out[i] = xy
+                    todo[i] = False
+                    break
+        # Transform what is left: unique vectors, representatives, and rows whose bytes did not match.
+        idx = np.flatnonzero(todo)
+        if idx.size:
+            out[idx], _ = _transform_batch_cpu(pca, k_pca, umap_model, args.umap_components, mat[idx])
+        out[in_batch] = out[r[in_batch] - g]             # in-batch copies take their representative's point
+        n_reused += b - idx.size                         # every row not transformed reused coordinates
+        coords[g:g + b] = out
+        # Keep every transformed row whose candidate copies continue past this batch: representatives,
+        # and rows that only collided with their representative's fingerprint.
+        for i in idx[last[r[idx]] >= g + b]:
+            stored.setdefault(r[i], []).append((U[i].copy(), out[i].copy()))
+        peak_held = max(peak_held, len(stored))
+        for k in np.unique(r[(r < g) & (last[r] < g + b)]):  # their last candidate copy was in this batch
+            del stored[k]
+        g += b
+    n_degenerate = int(np.isnan(coords[:, 0]).sum())
+    print(f"Transformed {n_clonotypes - n_reused} distinct vectors in {time.time() - start_tr:.2f}s; "
+          f"{n_reused} identical copies reused their representative's coordinates (at most {peak_held} "
+          f"representatives held; degenerate-excluded={n_degenerate}).")
     return keys, coords, n_degenerate, k_pca
 
 
@@ -1446,11 +1530,11 @@ def _run_embedding_gpu(pf, D, n_clonotypes, min_required, args, output_path):
 
     # Collapse EXACT-duplicate reduced vectors before the UMAP fit. Identical embeddings map to an
     # identical PCA value (PCA is a deterministic linear map), and cuML's GPU UMAP places zero-distance
-    # duplicate points erratically (scattered artefacts).
+    # duplicate points erratically (scattered artefacts). Hash-grouped, so no sorted copies of the matrix.
     Xn_host = cp.asnumpy(Xn)
     del Xn
-    uniq, inv = np.unique(Xn_host, axis=0, return_inverse=True)
-    inv = inv.ravel()   # numpy 2.x can return a 2-D inverse for axis=0; flatten to (n_valid,)
+    rep_rows, inv = _collapse_identical(Xn_host)
+    uniq = Xn_host[rep_rows]
     n_unique = int(uniq.shape[0])
     if n_unique < Xn_host.shape[0]:
         print(f"Collapsing {Xn_host.shape[0]} → {n_unique} unique reduced vectors "
