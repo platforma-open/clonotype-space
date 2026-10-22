@@ -1,5 +1,17 @@
 # @platforma-open/milaboratories.clonotype-space
 
+## 3.9.0
+
+### Minor Changes
+
+- 98ac6e6: Embedding mode: clonotypes with identical embeddings now always share one point in the UMAP. Identical vectors are collapsed before the UMAP fit and each distinct vector is placed once, its copies reusing its coordinates; before, copies processed in different batches could land far apart. Only byte-identical embeddings are merged. SDK upgrade.
+
+## 3.8.3
+
+### Patch Changes
+
+- f83ff98: Fix python run env, SDK upgrade
+
 ## 3.8.2
 
 ### Patch Changes

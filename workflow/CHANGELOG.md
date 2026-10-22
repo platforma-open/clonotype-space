@@ -1,5 +1,21 @@
 # @platforma-open/milaboratories.clonotype-space.workflow
 
+## 3.9.0
+
+### Patch Changes
+
+- 3242a40: npm update
+- Updated dependencies [98ac6e6]
+  - @platforma-open/milaboratories.clonotype-space.umap@2.19.0
+
+## 3.8.3
+
+### Patch Changes
+
+- f83ff98: Fix python run env, SDK upgrade
+- Updated dependencies [f83ff98]
+  - @platforma-open/milaboratories.clonotype-space.umap@2.18.1
+
 ## 3.6.5
 
 ### Patch Changes

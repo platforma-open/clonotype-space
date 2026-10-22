@@ -1,5 +1,19 @@
 # @platforma-open/milaboratories.clonotype-space.model
 
+## 3.9.0
+
+### Patch Changes
+
+- 3242a40: npm update
+- Updated dependencies [3242a40]
+  - @platforma-open/milaboratories.clonotype-space.kind@1.1.1
+
+## 3.8.3
+
+### Patch Changes
+
+- f83ff98: Fix python run env, SDK upgrade
+
 ## 3.7.2
 
 ### Patch Changes
