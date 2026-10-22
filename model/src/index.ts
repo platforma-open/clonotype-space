@@ -2,6 +2,7 @@ import strings from "@milaboratories/strings";
 import { kind } from "@platforma-open/milaboratories.clonotype-space.kind";
 import type {
   DataInfo,
+  DatasetOption,
   InferOutputsType,
   PColumn,
   PColumnIdAndSpec,
@@ -10,7 +11,14 @@ import type {
   RenderCtxBase,
   TreeNodeAccessor,
 } from "@platforma-sdk/model";
-import { BlockModelV3, createPFrameForGraphs, isPColumnSpec } from "@platforma-sdk/model";
+import {
+  BlockModelV3,
+  buildDatasetOptions,
+  createGlobalPObjectId,
+  createPFrameForGraphs,
+  isPColumnSpec,
+  legacyColumnSelectorsToPredicate,
+} from "@platforma-sdk/model";
 import { blockDataModel } from "./dataModel";
 import { getDefaultBlockLabel } from "./label";
 import type { BlockArgs, BlockData } from "./types";
@@ -31,6 +39,13 @@ const inputAnchorSpecs = [
     annotations: { "pl7.app/isAnchor": "true" },
   },
 ];
+
+// Key axes of the datasets this block lays out: bulk and single-cell clonotypes, and variants.
+const DATASET_KEY_AXES: ReadonlySet<string> = new Set([
+  "pl7.app/vdj/clonotypeKey",
+  "pl7.app/vdj/scClonotypeKey",
+  "pl7.app/variantKey",
+]);
 
 function computeDefaultLabel(data: BlockData): string {
   if (data.inputMode === "embedding") {
@@ -75,6 +90,7 @@ export const platforma = BlockModelV3.create({ dataModel: blockDataModel, kind }
   // configuration the user actually set.
   .templateParams((data) => ({
     inputAnchor: data.inputAnchor,
+    filterRef: data.filterRef,
     embeddingRef: data.embeddingRef,
 
     inputMode: data.inputMode,
@@ -126,6 +142,11 @@ export const platforma = BlockModelV3.create({ dataModel: blockDataModel, kind }
       mem: data.mem,
       requireGpu: data.requireGpu,
       gpuMemory: data.gpuMemory,
+      // The subset's canonical column id, which the workflow stamps as `pl7.app/inputSubset`.
+      // Absent without a filter, so unfiltered args are unchanged.
+      ...(data.filterRef !== undefined && {
+        inputFilter: createGlobalPObjectId(data.filterRef.blockId, data.filterRef.name),
+      }),
     };
 
     if (data.inputMode === "embedding") {
@@ -141,7 +162,21 @@ export const platforma = BlockModelV3.create({ dataModel: blockDataModel, kind }
     return { ...shared, sequencesRef: data.sequencesRef, sequenceType: data.sequenceType };
   })
 
-  .output("inputOptions", (ctx) => ctx.resultPool.getOptions(inputAnchorSpecs))
+  // Datasets, each with its subset columns (e.g. Repertoire Labeling labels) as filters.
+  .output(
+    "inputOptions",
+    (ctx): DatasetOption[] =>
+      buildDatasetOptions(ctx, {
+        // The same selectors getOptions took before, so the list and its labels are unchanged
+        primary: legacyColumnSelectorsToPredicate(inputAnchorSpecs),
+        // Only subsets keyed by the clonotype axis alone
+        filter: (spec) =>
+          isPColumnSpec(spec) &&
+          spec.axesSpec.length === 1 &&
+          DATASET_KEY_AXES.has(spec.axesSpec[0].name),
+        requireEnrichments: false,
+      }) ?? [],
+  )
 
   .output(
     "modality",
@@ -296,19 +331,37 @@ export const platforma = BlockModelV3.create({ dataModel: blockDataModel, kind }
     const datasetSpec = ctx.resultPool.getPColumnSpecByRef(ref);
     const cloneAxis = datasetSpec?.axesSpec?.[1];
     if (cloneAxis === undefined) return undefined;
+    // Full-data embeddings always; a subset's embedding only when that subset is picked here
+    const subset =
+      ctx.data.filterRef &&
+      createGlobalPObjectId(ctx.data.filterRef.blockId, ctx.data.filterRef.name);
     const sameClonotypeAxis = (embAxis?: { name?: string; domain?: Record<string, string> }) => {
       if (embAxis === undefined || embAxis.name !== cloneAxis.name) return false;
       const datasetDomain = cloneAxis.domain ?? {};
       const embDomain = embAxis.domain ?? {};
       return Object.keys(datasetDomain).every((k) => embDomain[k] === datasetDomain[k]);
     };
-    const options = ctx.resultPool.getOptions(
+    const allOptions = ctx.resultPool.getOptions(
       (spec) =>
         isPColumnSpec(spec) &&
         spec.name === "pl7.app/embedding" &&
+        (spec.domain?.["pl7.app/inputSubset"] ?? subset) === subset &&
         sameClonotypeAxis(spec.axesSpec?.[0]),
       { label: { includeNativeLabel: true } },
     );
+    // A full-data embedding is hidden when the subset has its own of the same model and sequence
+    const described = allOptions.map((o) => {
+      const {
+        "pl7.app/inputSubset": stamp,
+        "pl7.app/blockId": _b,
+        ...rest
+      } = ctx.resultPool.getPColumnSpecByRef(o.ref)?.domain ?? {};
+      return { o, stamp, key: JSON.stringify(Object.entries(rest).sort()) };
+    });
+    const subsetKeys = new Set(described.filter((d) => d.stamp !== undefined).map((d) => d.key));
+    const options = described
+      .filter((d) => d.stamp !== undefined || !subsetKeys.has(d.key))
+      .map((d) => d.o);
     return options.map((o) => {
       const spec = ctx.resultPool.getPColumnSpecByRef(o.ref);
       return {

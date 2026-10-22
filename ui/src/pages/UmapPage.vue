@@ -1,12 +1,18 @@
 <script setup lang="ts">
 import { getDefaultBlockLabel } from "@platforma-open/milaboratories.clonotype-space.model";
 import type {
+  DatasetSelection,
   PColumnIdAndSpec,
   PlRef,
   PlSelectionModel,
   SUniversalPColumnId,
 } from "@platforma-sdk/model";
-import { getRawPlatformaInstance } from "@platforma-sdk/model";
+import {
+  createDatasetSelection,
+  createPrimaryRef,
+  getRawPlatformaInstance,
+  plRefsEqual,
+} from "@platforma-sdk/model";
 
 import { PlMultiSequenceAlignment } from "@milaboratories/multi-sequence-alignment";
 import strings from "@milaboratories/strings";
@@ -18,6 +24,7 @@ import {
   PlBtnGhost,
   PlBtnGroup,
   PlCheckbox,
+  PlDatasetSelector,
   PlDropdownMulti,
   PlDropdownRef,
   PlLogView,
@@ -76,17 +83,29 @@ function labelsForRefs(refs: SUniversalPColumnId[]): string[] {
     .sort();
 }
 
-const inputAnchorModel = computed({
-  get: () => app.model.data.inputAnchor,
-  set: (ref: PlRef | undefined) => {
+// The selector picks a dataset, or a dataset narrowed by one of its subset columns.
+const datasetSelection = computed<DatasetSelection | undefined>({
+  get: () => {
+    const { inputAnchor, filterRef } = app.model.data;
+    if (inputAnchor === undefined) return undefined;
+    return createDatasetSelection(createPrimaryRef(inputAnchor, filterRef));
+  },
+  set: (selection) => {
+    // Never cleared, as before: the selector is required and not clearable
+    if (!selection) return;
+    const ref = selection.primary.column;
+    const prev = app.model.data.inputAnchor;
     app.model.data.inputAnchor = ref;
+    app.model.data.filterRef = selection.primary.filter;
+    // A new subset of the same dataset keeps the column choices below
+    if (prev !== undefined && plRefsEqual(prev, ref, true)) return;
     // Sequence options derive from inputAnchor; the prior selection no longer
     // applies. Clear and let the auto-select watcher below re-fill from the
     // new dataset's defaults.
     app.model.data.sequencesRef = [];
     app.model.data.sequenceLabels = [];
     // Embedding refs are anchor-bound and not portable across datasets: reset to sequence mode and
-    // clear the embedding selection on any dataset change. The embedding
+    // clear the embedding selection on a dataset change. The embedding
     // auto-select watcher below then reseeds embeddingRef from the new dataset's options.
     app.model.data.inputMode = "sequence-features";
     app.model.data.embeddingRef = undefined;
@@ -177,7 +196,7 @@ watch(embeddingAvailable, (available) => {
 });
 
 // Auto-select the most-complete embedding column whenever the current selection is empty or no longer
-// matches the discoverable options. Reseeded on dataset change (inputAnchorModel clears
+// matches the discoverable options. Reseeded on dataset change (datasetSelection clears
 // embeddingRef); an explicit user pick is preserved while it stays valid.
 watch(
   () => app.model.outputs.embeddingOptions,
@@ -333,8 +352,8 @@ watch(
         </PlBtnGhost>
       </template>
       <template #settingsSlot>
-        <PlDropdownRef
-          v-model="inputAnchorModel"
+        <PlDatasetSelector
+          v-model="datasetSelection"
           :options="app.model.outputs.inputOptions"
           label="Select dataset"
           required

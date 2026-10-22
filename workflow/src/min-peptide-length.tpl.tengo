@@ -4,7 +4,9 @@ pt   := import("@platforma-sdk/workflow-tengo:pt")
 self.validateInputs({
 	"__options__,closed": "",
 	spec: "any",
-	data: "any"
+	data: "any",
+	"filterSpec,?": "any",
+	"filterData,?": "any"
 })
 
 self.defineOutputs("minLength")
@@ -13,9 +15,17 @@ self.body(func(inputs) {
 	// Reconstruct the column map shape pt expects.
 	lenColumn := { spec: inputs.spec, data: inputs.data }
 
+	// Optional subset filter: measure only the peptides laid out, so an excluded short peptide
+	// can't switch on the short-peptide k-mer settings.
+	frameInput := pt.p.column("len", lenColumn)
+	if !is_undefined(inputs.filterData) {
+		frameInput = pt.p.inner(frameInput,
+			pt.p.column("subsetFilter", { spec: inputs.filterSpec, data: inputs.filterData }))
+	}
+
 	// Whole-frame aggregation: emits a single-row TSV with the min value.
 	ptWf := pt.workflow()
-	ptWf.frame(pt.p.column("len", lenColumn)).
+	ptWf.frame(frameInput).
 		select(pt.col("len").min().alias("min_len")).
 		saveContent("min_len.ndjson")
 

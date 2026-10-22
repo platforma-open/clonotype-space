@@ -11,6 +11,7 @@ assets := import("@platforma-sdk/workflow-tengo:assets")
 render := import("@platforma-sdk/workflow-tengo:render")
 pframes := import("@platforma-sdk/workflow-tengo:pframes")
 xsv := import("@platforma-sdk/workflow-tengo:pframes.xsv")
+json := import("json")
 
 processTpl := assets.importTemplate(":process")
 
@@ -22,6 +23,10 @@ wf.prepare(func(args) {
 	prepared := {}
 	if !is_undefined(args.embeddingRef) {
 		prepared.resolvedEmbedding = wf.resolve(args.embeddingRef, { errIfMissing: true })
+		// The subset filters the embedding matrix built in the body
+		if !is_undefined(args.inputFilter) {
+			prepared.resolvedFilter = wf.resolve(json.decode(args.inputFilter), { errIfMissing: true })
+		}
 	}
 
 	return prepared
@@ -51,6 +56,11 @@ wf.body(func(args) {
 			domain: { "pl7.app/feature": "peptide" }
 		}, "peptideSequenceLength")
 
+	// Optional subset column picked alongside the dataset (PlDatasetSelector)
+	if !is_undefined(args.inputFilter) {
+		bundleBuilder.addRef(json.decode(args.inputFilter))
+	}
+
 	columns := bundleBuilder.build()
 
 	// Inputs shared by both modes.
@@ -72,12 +82,6 @@ wf.body(func(args) {
 		// Model provenance from the column's spec (stamped on the output domain).
 		embeddingModel := embSpec.domain["pl7.app/embedding/model"]
 
-		// Long-format Parquet matrix
-		embeddingMatrix := xsv.exportFrame([embeddingCol], "parquet", {
-			mem: string(args.mem) + "GiB",
-			cpu: 4
-		})
-
 		// Matrix column headers are the embedding column's own axis/value pl7.app/label values, passed
 		// to main.py as --key-col/--dim-col/--value-col. The clonotype axis passes through verbatim from
 		// the dataset and may lack a pl7.app/label, so fall back to "clonotypeKey" — keeps the parquet
@@ -86,17 +90,45 @@ wf.body(func(args) {
 		if is_undefined(keyCol) {
 			keyCol = "clonotypeKey"
 		}
+		dimCol := embSpec.axesSpec[1].annotations["pl7.app/label"]
+		valueCol := embSpec.annotations["pl7.app/label"]
+
+		// Long-format Parquet matrix
+		embeddingMatrix := undefined
+		if is_undefined(args.resolvedFilter) {
+			embeddingMatrix = xsv.exportFrame([embeddingCol], "parquet", {
+				mem: string(args.mem) + "GiB",
+				cpu: 4
+			})
+		} else {
+			// The same matrix restricted to the subset's clonotypes, with the headers exportFrame writes
+			matrixBuilder := pframes.tableBuilder("parquet")
+			matrixBuilder.addPrimary("embedding", {
+				__isPrimaryRef: "v1",
+				column: { spec: embSpec, data: embeddingCol.data },
+				filter: { spec: args.resolvedFilter.spec, data: args.resolvedFilter.data }
+			}, { header: valueCol })
+			matrixBuilder.setAxisHeader(embSpec.axesSpec[0], keyCol)
+			matrixBuilder.setAxisHeader(embSpec.axesSpec[1], dimCol)
+			matrixBuilder.mem(string(args.mem) + "GiB")
+			matrixBuilder.cpu(4)
+			embeddingMatrix = matrixBuilder.build()
+		}
 
 		processInputs.embeddingMatrix = embeddingMatrix
 		processInputs.embeddingModel = embeddingModel
 		processInputs.keyCol = keyCol
-		processInputs.dimCol = embSpec.axesSpec[1].annotations["pl7.app/label"]
-		processInputs.valueCol = embSpec.annotations["pl7.app/label"]
+		processInputs.dimCol = dimCol
+		processInputs.valueCol = valueCol
 		// Embedding vector length D — passed to main.py's streaming loader as --dims (avoids a scan).
 		processInputs.dims = embSpec.annotations["pl7.app/embedding/length"]
 	} else {
 		processInputs.sequencesRef = sequencesRef
 		processInputs.sequenceType = args.sequenceType
+	}
+	// Only for a subset run, so a full-data run keeps exactly its previous inputs
+	if !is_undefined(args.inputFilter) {
+		processInputs.subset = args.inputFilter
 	}
 
 	// Delegate to the inner template. Its body runs as soon as upstream specs are available — does not

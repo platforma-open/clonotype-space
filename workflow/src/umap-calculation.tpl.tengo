@@ -62,7 +62,8 @@ self.body(func(args) {
         isPeptide := is_undefined(args.isPeptide) ? false : args.isPeptide
         if isPeptide && !is_undefined(args.minPeptideLength) {
             minLen := int(json.decode(string(args.minPeptideLength.getData())).min_len)
-            if minLen < 10 {
+            // Undefined when a subset leaves no peptides; main.py then writes an empty UMAP
+            if !is_undefined(minLen) && minLen < 10 {
                 kmerSize = 2
                 encoding = "pos-kmer"
             }

@@ -4,17 +4,21 @@ ll := import("@platforma-sdk/workflow-tengo:ll")
 // embedding-derived projection is distinguishable and traceable in the result
 // pool. In sequence mode (embeddingModel undefined) the domain is column identity,
 // so the k-mer columns must NOT change.
-buildUmapDomain := func(blockId, embeddingModel) {
+buildUmapDomain := func(blockId, embeddingModel, subset) {
   d := {
     "pl7.app/umap/blockId": blockId
   }
   if !is_undefined(embeddingModel) {
     d["pl7.app/embedding/model"] = embeddingModel
   }
+  // A run on a subset says so: its coordinates cover only the subset's clonotypes
+  if !is_undefined(subset) {
+    d["pl7.app/inputSubset"] = subset
+  }
   return d
 }
 
-getColumns := func(datasetSpec, blockId, embeddingModel) {
+getColumns := func(datasetSpec, blockId, embeddingModel, subset) {
   return {
     axes: [
       {
@@ -30,7 +34,7 @@ getColumns := func(datasetSpec, blockId, embeddingModel) {
         spec: {
           name: "pl7.app/umap1",
           valueType: "Double",
-          domain: buildUmapDomain(blockId, embeddingModel),
+          domain: buildUmapDomain(blockId, embeddingModel, subset),
           annotations: {
             "pl7.app/label": "UMAP Dim1",
             "pl7.app/format": ".2f",
@@ -45,7 +49,7 @@ getColumns := func(datasetSpec, blockId, embeddingModel) {
         spec: {
           name: "pl7.app/umap2",
           valueType: "Double",
-          domain: buildUmapDomain(blockId, embeddingModel),
+          domain: buildUmapDomain(blockId, embeddingModel, subset),
           annotations: {
             "pl7.app/label": "UMAP Dim2",
             "pl7.app/format": ".2f",

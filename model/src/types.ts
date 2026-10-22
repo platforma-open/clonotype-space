@@ -15,6 +15,8 @@ export type { InputMode, SequenceType } from "@platforma-open/milaboratories.clo
 export type BlockData = {
   customBlockLabel: string;
   inputAnchor?: PlRef;
+  /** Subset column picked with the dataset in PlDatasetSelector (e.g. a Repertoire Labeling label). */
+  filterRef?: PlRef;
   /**
    * UMAP feature source. Defaulted to `sequence-features` in `init()` and the
    * `upgradeLegacy` path so existing projects load in sequence mode.
@@ -76,6 +78,8 @@ export type BlockArgs = {
   defaultBlockLabel: string;
   customBlockLabel: string;
   inputAnchor: PlRef;
+  /** Canonical id of the subset column; present only when a filter is set. */
+  inputFilter?: string;
   inputMode: InputMode;
   // Sequence-features mode (omitted in embedding mode).
   sequencesRef?: SUniversalPColumnId[];
