@@ -237,13 +237,13 @@ const isEmpty = asyncComputed(async () => {
   );
 });
 
-// The chart's selection lives in the plugin's data. Read it through the same
-// plugin model the chart uses, rather than holding a second copy here — the
-// plugin component owns the binding, and the alignment only observes it.
-const umapPlugin = usePlugin(app.plugins.umap.handle);
-const selection = computed<PlSelectionModel>(
-  () => umapPlugin.model.data.selection ?? { axesSpec: [], selectedKeys: [] },
-);
+// Who is selected in the chart: the page's, not the plugin's. It is what one
+// person is pointing at right now rather than how the chart is set up, and the
+// alignment below reads it as its own input.
+const selection = ref<PlSelectionModel>({
+  axesSpec: [],
+  selectedKeys: [],
+});
 
 const multipleSequenceAlignmentOpen = ref(false);
 const umapLogOpen = ref(false);
@@ -300,6 +300,10 @@ watch(
   { immediate: true },
 );
 
+// Which tab is open is the chart's own setup, so it lives in the plugin's
+// state and is reached through the plugin model — unlike the selection above.
+const umapPlugin = usePlugin(app.plugins.umap.handle);
+
 // Auto-close settings panel when the block transitions to running.
 watch(
   () => app.model.outputs.isRunning,
@@ -314,6 +318,7 @@ watch(
 <template>
   <PlBlockPage no-body-gutters>
     <GraphMakerPlugin
+      v-model:selection="selection"
       :handle="app.plugins.umap.handle"
       :default-options="defaultOptions"
       :status-text="{ noPframe: { title: strings.callToActions.configureSettingsAndRun } }"
