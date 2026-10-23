@@ -12,7 +12,6 @@ import { PlMultiSequenceAlignment } from "@milaboratories/multi-sequence-alignme
 import strings from "@milaboratories/strings";
 import {
   listToOptions,
-  usePlugin,
   PlAccordionSection,
   PlAlert,
   PlBlockPage,
@@ -28,7 +27,7 @@ import {
   PlTextField,
 } from "@platforma-sdk/ui-vue";
 
-import type { PredefinedGraphOption } from "@milaboratories/graph-maker";
+import type { GraphMakerPluginExposed, PredefinedGraphOption } from "@milaboratories/graph-maker";
 import { GraphMakerPlugin } from "@milaboratories/graph-maker";
 import { asyncComputed } from "@vueuse/core";
 import { computed, ref, watch } from "vue";
@@ -300,16 +299,14 @@ watch(
   { immediate: true },
 );
 
-// Which tab is open is the chart's own setup, so it lives in the plugin's
-// state and is reached through the plugin model — unlike the selection above.
-const umapPlugin = usePlugin(app.plugins.umap.handle);
+const umapChart = ref<GraphMakerPluginExposed | null>(null);
 
 // Auto-close settings panel when the block transitions to running.
 watch(
   () => app.model.outputs.isRunning,
   (isRunning, wasRunning) => {
     if (isRunning && !wasRunning) {
-      umapPlugin.model.data.state = { ...umapPlugin.model.data.state, currentTab: null };
+      umapChart.value?.closeSettings();
     }
   },
 );
@@ -318,6 +315,7 @@ watch(
 <template>
   <PlBlockPage no-body-gutters>
     <GraphMakerPlugin
+      ref="umapChart"
       v-model:selection="selection"
       :handle="app.plugins.umap.handle"
       :default-options="defaultOptions"
