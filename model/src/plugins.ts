@@ -7,12 +7,11 @@ import { graphMakerPlugin } from "@milaboratories/graph-maker/plugin";
  * Declared apart from the block model because the data model's `.transfer()`
  * names it, and the block model imports the data model.
  */
-export const umapPlugin = graphMakerPlugin.create({
+export const umapPlugin = graphMakerPlugin("scatterplot-umap").create({
   pluginId: "umap",
   // Where a chart saved before the plugin enters the chain.
   transferAt: "v1",
   config: {
-    chartType: "scatterplot-umap",
     initialTitle: "Sequence Space UMAP",
     initialTemplate: "dots",
     initialState: {
