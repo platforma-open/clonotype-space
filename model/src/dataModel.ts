@@ -45,7 +45,6 @@ export const blockDataModel = new DataModelBuilder({ kind })
   // columns in a frame built the old way — so it is left to `defaultOptions`.
   .transfer(umapPlugin, (data) => ({
     state: transferableGraphState(data.graphStateUMAP),
-    selection: undefined,
     chartType: "scatterplot-umap" as const,
     readonlyInputs: [],
     allowChartDeleting: false,
