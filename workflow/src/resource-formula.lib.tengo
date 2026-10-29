@@ -84,8 +84,24 @@ apply := func(builder, args, inputMode) {
     return builder
 }
 
+// needsCpuFallback(args) -> true when apply() asked for a GPU (direct mode with requireGpu).
+needsCpuFallback := func(args) {
+    direct := !is_undefined(args.directPerformanceSettings) && args.directPerformanceSettings
+    return direct && !is_undefined(args.requireGpu) && args.requireGpu
+}
+
+// cpuOnly(builder, args) -> builder with the direct-mode CPU allocation only: the plan that runs
+// when the backend reports that no GPU came in time (GPUMissed fallback).
+cpuOnly := func(builder, args) {
+    return builder.resources({
+        onCPU: {cpu: args.cpu, ram: string(args.mem) + "GiB" }
+    })
+}
+
 export {
     apply: apply,
+    needsCpuFallback: needsCpuFallback,
+    cpuOnly: cpuOnly,
     // Exported for unit tests (resource-formula.test.tengo).
     resourcesEmbeddings: resourcesEmbeddings,
     resourcesSeqFeatures: resourcesSeqFeatures

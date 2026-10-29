@@ -84,14 +84,24 @@ self.body(func(args) {
             arg("--n-jobs").argExpr("{system.cpu}")
     }
 
-    // UMAP software execution
-    umapClones := builder.
+    builder = builder.
         saveFile("umap.tsv").
         saveFile("skipped_clonotypes_summary.txt").
         saveStdoutStream().
         // saveStdoutContent().
-        cache(24 * 60 * 60 * 1000).
-        run()
+        cache(24 * 60 * 60 * 1000)
+
+    // GPU -> CPU fallback: when the backend reports that no GPU came in time (GPUMissed), the same
+    // command runs again with the CPU allocation only. The copy is taken after every output is
+    // declared, so the fallback saves and streams exactly what the GPU plan does.
+    if resourceFormula.needsCpuFallback(args) {
+        builder = builder.fallbacks({
+            GPUMissed: [{ name: "cpuOnly", builder: resourceFormula.cpuOnly(builder.copy(), args) }]
+        })
+    }
+
+    // UMAP software execution
+    umapClones := builder.run()
 
     // Get stdout output and UMAP file now while we have the raw exec object
     umapOutput := umapClones.getStdoutStream()
