@@ -101,3 +101,21 @@ TestApplyRoutesByInputMode := func() {
     test.isEqual(_gib(128), _eval(seq.calls.spec.onCPU.ram, "input.tsv", 0, 1000000000))        // lineCount -> cap
     test.isEqual(_gib(16),  _eval(seq.calls.spec.onCPU.ram, "input.tsv", 100 * _gib(1), 0))     // size ignored -> floor
 }
+
+// -------- GPU -> CPU fallback helpers ------------------------------------------
+
+TestNeedsCpuFallback := func() {
+    test.isTrue(rf.needsCpuFallback({ directPerformanceSettings: true, requireGpu: true }), "direct + requireGpu asks for a GPU")
+    test.isFalse(rf.needsCpuFallback({ directPerformanceSettings: true, requireGpu: false }), "direct without GPU")
+    test.isFalse(rf.needsCpuFallback({}), "data-driven mode never asks for a GPU")
+}
+
+TestCpuOnly := func() {
+    b := _mock()
+    rf.cpuOnly(b, { mem: 48, cpu: 6, gpuMemory: 24 })
+
+    spec := b.calls.spec
+    test.isEqual("48GiB", spec.onCPU.ram)
+    test.isEqual(6, spec.onCPU.cpu)
+    test.isTrue(is_undefined(spec.onGPU), "the fallback plan requests no GPU")
+}
