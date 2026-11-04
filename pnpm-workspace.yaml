@@ -11,10 +11,10 @@ catalog:
   # SDK packages - EXACT VERSIONS (no ^ or ~)
   "@milaboratories/ts-builder": 1.7.2
   "@milaboratories/ts-configs": 1.4.0
-  "@platforma-sdk/workflow-tengo": 6.16.0
+  "@platforma-sdk/workflow-tengo": 6.20.0
   "@platforma-sdk/model": 1.85.2
   "@platforma-sdk/ui-vue": 1.85.2
-  "@platforma-sdk/tengo-builder": 4.1.12
+  "@platforma-sdk/tengo-builder": 4.1.17
   "@platforma-sdk/package-builder": 3.16.1
   "@platforma-sdk/block-kind": 1.1.0
   "@platforma-sdk/block-tools": 2.16.16
