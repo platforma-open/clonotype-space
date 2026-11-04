@@ -16,6 +16,7 @@
     "@milaboratories/graph-maker": "catalog:",
     "@milaboratories/helpers": "catalog:",
     "@milaboratories/multi-sequence-alignment": "catalog:",
+    "@milaboratories/sequence-viewer": "catalog:",
     "@milaboratories/strings": "catalog:",
     "@platforma-open/milaboratories.clonotype-space.model": "workspace:*",
     "@platforma-sdk/model": "catalog:",

@@ -19,6 +19,7 @@ import {
   isPColumnSpec,
   legacyColumnSelectorsToPredicate,
 } from "@platforma-sdk/model";
+import { sequenceViewerPlugin } from "@milaboratories/sequence-viewer/plugin";
 import { blockDataModel } from "./dataModel";
 import { getDefaultBlockLabel } from "./label";
 import type { BlockArgs, BlockData } from "./types";
@@ -80,7 +81,20 @@ function getAnchoredClonotypeProps(
   ).filter((p) => p.spec.annotations?.["pl7.app/sequence/isAnnotation"] !== "true");
 }
 
+/** The sequence viewer opened over the chart's selection, beside the alignment. */
+const sequenceViewer = sequenceViewerPlugin.create({ pluginId: "sequenceViewer" });
+
 export const platforma = BlockModelV3.create({ dataModel: blockDataModel, kind })
+
+  // The input dataset is the anchor; the plugin finds the sequences, region markups and
+  // labels on its clonotypes in the result pool. No reads: clonotypes carry no traces.
+  .plugin(sequenceViewer, {
+    anchorColumns: (ctx) => {
+      const anchor = ctx.data.inputAnchor;
+      const column = anchor ? ctx.resultPool.getPColumnByRef(anchor) : undefined;
+      return column ? [column] : undefined;
+    },
+  })
 
   // Inverse of `init` — the same fields, projected back out for template export.
   // `graphStateUMAP` and `alignmentModel` are view state and never cross the

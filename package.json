@@ -31,5 +31,11 @@
     "oxfmt": "*",
     "oxlint": "*"
   },
-  "packageManager": "pnpm@9.12.0"
+  "packageManager": "pnpm@9.12.0",
+  "pnpm": {
+    "overrides": {
+      "@milaboratories/sequence-viewer": "file:../../core/visualizations/packages/sequence-viewer/package.tgz",
+      "@milaboratories/pf-plots": "file:../../core/visualizations/packages/pf-plots/package.tgz"
+    }
+  }
 }

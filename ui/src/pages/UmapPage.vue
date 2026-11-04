@@ -15,6 +15,7 @@ import {
 } from "@platforma-sdk/model";
 
 import { PlMultiSequenceAlignment } from "@milaboratories/multi-sequence-alignment";
+import { SequenceViewerPluginModal } from "@milaboratories/sequence-viewer";
 import strings from "@milaboratories/strings";
 import {
   listToOptions,
@@ -261,6 +262,7 @@ const selection = ref<PlSelectionModel>({
 });
 
 const multipleSequenceAlignmentOpen = ref(false);
+const sequenceViewerOpen = ref(false);
 const umapLogOpen = ref(false);
 
 // Clearing the selection on sequenceType change keeps the args lambda valid
@@ -343,6 +345,9 @@ watch(
           @click.stop="() => (multipleSequenceAlignmentOpen = true)"
         >
           {{ strings.titles.multipleSequenceAlignment }}
+        </PlBtnGhost>
+        <PlBtnGhost icon="dna" @click.stop="() => (sequenceViewerOpen = true)">
+          Sequence viewer
         </PlBtnGhost>
         <PlBtnGhost @click.stop="() => (umapLogOpen = true)">
           {{ strings.titles.logs }}
@@ -597,6 +602,11 @@ watch(
         :selection="selection"
       />
     </PlSlideModal>
+    <SequenceViewerPluginModal
+      v-model="sequenceViewerOpen"
+      :handle="app.plugins.sequenceViewer.handle"
+      :selection="selection"
+    />
     <PlSlideModal v-model="umapLogOpen" width="80%">
       <template #title>UMAP Log</template>
       <PlLogView :log-handle="app.model.outputs.umapOutput" />
