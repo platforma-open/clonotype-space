@@ -34,8 +34,8 @@ import {
   PlTextField,
 } from "@platforma-sdk/ui-vue";
 
-import type { PredefinedGraphOption } from "@milaboratories/graph-maker";
-import { GraphMaker } from "@milaboratories/graph-maker";
+import type { GraphMakerPluginExposed, PredefinedGraphOption } from "@milaboratories/graph-maker";
+import { GraphMakerPlugin } from "@milaboratories/graph-maker";
 import { asyncComputed } from "@vueuse/core";
 import { computed, ref, watch } from "vue";
 
@@ -255,6 +255,9 @@ const isEmpty = asyncComputed(async () => {
   );
 });
 
+// Who is selected in the chart: the page's, not the plugin's. It is what one
+// person is pointing at right now rather than how the chart is set up, and the
+// alignment below reads it as its own input.
 const selection = ref<PlSelectionModel>({
   axesSpec: [],
   selectedKeys: [],
@@ -315,12 +318,14 @@ watch(
   { immediate: true },
 );
 
+const umapChart = ref<GraphMakerPluginExposed | null>(null);
+
 // Auto-close settings panel when the block transitions to running.
 watch(
   () => app.model.outputs.isRunning,
   (isRunning, wasRunning) => {
     if (isRunning && !wasRunning) {
-      app.model.data.graphStateUMAP.currentTab = null;
+      umapChart.value?.closeSettings();
     }
   },
 );
@@ -328,11 +333,10 @@ watch(
 
 <template>
   <PlBlockPage no-body-gutters>
-    <GraphMaker
-      v-model="app.model.data.graphStateUMAP"
+    <GraphMakerPlugin
+      ref="umapChart"
       v-model:selection="selection"
-      chartType="scatterplot-umap"
-      :p-frame="app.model.outputs.umapPf"
+      :handle="app.plugins.umap.handle"
       :default-options="defaultOptions"
       :status-text="{ noPframe: { title: strings.callToActions.configureSettingsAndRun } }"
     >
@@ -583,7 +587,7 @@ watch(
           different dataset.
         </PlAlert>
       </template>
-    </GraphMaker>
+    </GraphMakerPlugin>
     <PlSlideModal
       v-model="multipleSequenceAlignmentOpen"
       width="100%"

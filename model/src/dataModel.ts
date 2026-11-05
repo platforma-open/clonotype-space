@@ -1,6 +1,8 @@
 import { kind } from "@platforma-open/milaboratories.clonotype-space.kind";
 import { DataModelBuilder } from "@platforma-sdk/model";
+import { transferableGraphState } from "@milaboratories/graph-maker/plugin";
 import type { BlockData, LegacyBlockArgs, LegacyBlockUiState } from "./types";
+import { umapPlugin } from "./plugins";
 
 const defaultGraphState = (): BlockData["graphStateUMAP"] => ({
   title: "Sequence Space UMAP",
@@ -37,6 +39,16 @@ export const blockDataModel = new DataModelBuilder({ kind })
     gpuMemory: undefined,
     graphStateUMAP: uiState?.graphStateUMAP ?? defaultGraphState(),
     alignmentModel: uiState?.alignmentModel ?? {},
+  }))
+  // A chart saved before the UMAP became a plugin instance: hand the plugin
+  // what survives the move. The data mapping does not — the old ids name
+  // columns in a frame built the old way — so it is left to `defaultOptions`.
+  .transfer(umapPlugin, (data) => ({
+    state: transferableGraphState(data.graphStateUMAP),
+    chartType: "scatterplot-umap" as const,
+    readonlyInputs: [],
+    allowChartDeleting: false,
+    allowTitleEditing: false,
   }))
   // `params` is absent when a block is created by hand rather than from a
   // template, so every field the contract carries keeps its own default.
