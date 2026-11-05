@@ -1,5 +1,7 @@
 # @platforma-open/milaboratories.clonotype-space
 
+## 3.10.1
+
 ## 3.10.0
 
 ### Minor Changes
