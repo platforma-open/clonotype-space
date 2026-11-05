@@ -1837,9 +1837,9 @@ packages:
   '@platforma-sdk/package-builder-lib@1.4.3':
     resolution: {integrity: sha512-HDyv2eW3x2YovpfMf9/z1aTJ2JaBfHccvR1SqeBeVFOnxH+FTD2blw5gGN2/eLt4CPdytCUZbcoU8/7Wl7yivQ==}
 
-  '@platforma-sdk/tengo-builder@4.1.12':
-    resolution: {integrity: sha512-IOpz5n/rXpuJ/UfFlVEu8h5Ho9mHa/5Zzv31oYl1/V0pnPDZMuH2idQa4iUVaDk4yXQmQEgFNas4gsG1LKY/aA==}
-    engines: {node: '>=22'}
+  '@platforma-sdk/tengo-builder@4.1.17':
+    resolution: {integrity: sha512-qYwf6Q2gqjsvKQ67kbJrCTY8YCtRVjkKhD06bPQygjINnFtSO0ZMFVYbz/OZxd9gpF3LDpJOu9caSMy5ficToQ==}
+    engines: {node: '>=24'}
     hasBin: true
 
   '@platforma-sdk/test@1.85.3':
@@ -8854,7 +8854,7 @@ snapshots:
       oxlint: 1.63.0
       oxlint-plugin-eslint: 1.63.0
       rolldown: 1.1.5
-      rolldown-plugin-dts: 0.28.6(@volar/typescript@2.4.28)(@vue/language-core@3.3.10)(rolldown@1.1.5)(typescript@7.0.2)(vue-tsc@3.3.10(typescript@7.0.2))
+      rolldown-plugin-dts: 0.28.6(@volar/typescript@2.4.28)(@vue/language-core@3.3.10)(rolldown@1.1.5)(typescript@7.0.2)(vue-tsc@3.3.10(typescript@5.6.3))
       rollup-plugin-copy: 3.5.0
       rollup-plugin-sourcemaps2: 0.5.4(@types/node@25.0.3)(rollup@4.55.1)
       typescript: 7.0.2
@@ -8900,7 +8900,7 @@ snapshots:
       oxlint: 1.63.0
       oxlint-plugin-eslint: 1.63.0
       rolldown: 1.1.5
-      rolldown-plugin-dts: 0.28.6(@volar/typescript@2.4.28)(@vue/language-core@3.3.10)(rolldown@1.1.5)(typescript@7.0.2)(vue-tsc@3.3.10(typescript@7.0.2))
+      rolldown-plugin-dts: 0.28.6(@volar/typescript@2.4.28)(@vue/language-core@3.3.10)(rolldown@1.1.5)(typescript@7.0.2)(vue-tsc@3.3.10(typescript@5.6.3))
       rollup-plugin-copy: 3.5.0
       rollup-plugin-sourcemaps2: 0.5.4(@types/node@25.0.3)(rollup@4.55.1)
       typescript: 7.0.2
@@ -8946,7 +8946,7 @@ snapshots:
       oxlint: 1.63.0
       oxlint-plugin-eslint: 1.63.0
       rolldown: 1.1.5
-      rolldown-plugin-dts: 0.28.6(@volar/typescript@2.4.28)(@vue/language-core@3.3.10)(rolldown@1.1.5)(typescript@7.0.2)(vue-tsc@3.3.10(typescript@7.0.2))
+      rolldown-plugin-dts: 0.28.6(@volar/typescript@2.4.28)(@vue/language-core@3.3.10)(rolldown@1.1.5)(typescript@7.0.2)(vue-tsc@3.3.10(typescript@5.6.3))
       rollup-plugin-copy: 3.5.0
       rollup-plugin-sourcemaps2: 0.5.4(@types/node@25.0.3)(rollup@4.55.1)
       typescript: 7.0.2
@@ -9448,20 +9448,6 @@ snapshots:
       '@milaboratories/resolve-helper': 1.1.3
       archiver: 7.0.1
       undici: 7.30.2
-      winston: 3.19.0
-      yaml: 2.9.1
-      zod: 3.25.76
-    transitivePeerDependencies:
-      - bare-abort-controller
-      - react-native-b4a
-
-  '@platforma-sdk/tengo-builder@4.1.12':
-    dependencies:
-      '@aws-sdk/client-s3': 3.1157.0
-      '@aws-sdk/lib-storage': 3.1157.0(@aws-sdk/client-s3@3.1157.0)
-      '@milaboratories/resolve-helper': 1.1.3
-      archiver: 7.0.1
-      undici: 7.30.1
       winston: 3.19.0
       yaml: 2.9.1
       zod: 3.25.76
@@ -14423,7 +14409,7 @@ snapshots:
 
   reusify@1.1.0: {}
 
-  rolldown-plugin-dts@0.28.6(@volar/typescript@2.4.28)(@vue/language-core@3.3.10)(rolldown@1.1.5)(typescript@7.0.2)(vue-tsc@3.3.10(typescript@7.0.2)):
+  rolldown-plugin-dts@0.28.6(@volar/typescript@2.4.28)(@vue/language-core@3.3.10)(rolldown@1.1.5)(typescript@7.0.2)(vue-tsc@3.3.10(typescript@5.6.3)):
     dependencies:
       dts-resolver: 3.0.0
       get-tsconfig: 5.0.0-beta.6
