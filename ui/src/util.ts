@@ -1,39 +1,48 @@
-import type { PColumnPredicate } from "@platforma-sdk/model";
+import type { AxisId, PColumnPredicate } from "@platforma-sdk/model";
 import {
   type PTableColumnSpec,
   Annotation,
+  canonicalizeAxisId,
   Domain,
+  getAxisId,
   PAxisName,
   readAnnotationJson,
   readDomain,
 } from "@platforma-sdk/model";
 
-export const isSequenceColumn: PColumnPredicate = ({ spec }) => {
-  // Length / annotation columns are not sequence data.
-  if (
-    spec.name === "pl7.app/vdj/sequenceLength" ||
-    spec.name === "pl7.app/sequenceLength" ||
-    spec.name === "pl7.app/vdj/sequence/annotation"
-  )
-    return false;
-  // Reject cluster-centroid sequences (their axis is clusterId, not the
-  // input's clonotype/variant axis).
-  if (spec.axesSpec[0]?.name === "pl7.app/clusterId") return false;
-  // Only amino-acid sequences belong in MSA.
-  if (readDomain(spec, Domain.Alphabet) !== "aminoacid") return false;
-  // Single-cell sequences: reject non-primary chains (e.g. light), but keep
-  // chain-less constructs like scFv where the domain field is absent entirely.
-  if (spec.axesSpec[0]?.name === PAxisName.VDJ.ScClonotypeKey) {
-    const chainIndex = readDomain(spec, Domain.VDJ.ScClonotypeChain.Index);
-    if (chainIndex !== undefined && chainIndex !== "primary") return false;
-  }
+/** MSA sequence columns: those keyed by the input's key axis alone. */
+export function sequenceColumnPredicate(keyAxisId: AxisId | undefined): PColumnPredicate {
+  const keyAxis = keyAxisId === undefined ? undefined : canonicalizeAxisId(keyAxisId);
+  return ({ spec }) => {
+    // The MSA inner-joins its sequence columns, so one on another axis fails the query
+    // (cluster centroids on clusterId, known variants on knownVariantKey).
+    if (keyAxis === undefined || spec.axesSpec.length !== 1) return false;
+    if (canonicalizeAxisId(getAxisId(spec.axesSpec[0])) !== keyAxis) return false;
+    // Sequences are strings; counts such as AA mutations or mutations to known are not.
+    if (spec.valueType !== "String") return false;
+    // Length / annotation columns are not sequence data.
+    if (
+      spec.name === "pl7.app/vdj/sequenceLength" ||
+      spec.name === "pl7.app/sequenceLength" ||
+      spec.name === "pl7.app/vdj/sequence/annotation"
+    )
+      return false;
+    // Only amino-acid sequences belong in MSA.
+    if (readDomain(spec, Domain.Alphabet) !== "aminoacid") return false;
+    // Single-cell sequences: reject non-primary chains (e.g. light), but keep
+    // chain-less constructs like scFv where the domain field is absent entirely.
+    if (spec.axesSpec[0]?.name === PAxisName.VDJ.ScClonotypeKey) {
+      const chainIndex = readDomain(spec, Domain.VDJ.ScClonotypeChain.Index);
+      if (chainIndex !== undefined && chainIndex !== "primary") return false;
+    }
 
-  // Default-select the assembling-feature sequence.
-  const isAssemblingFeature =
-    readAnnotationJson(spec, Annotation.VDJ.IsAssemblingFeature) ??
-    spec.annotations?.["pl7.app/isAssemblingFeature"] === "true";
-  return { default: isAssemblingFeature };
-};
+    // Default-select the assembling-feature sequence.
+    const isAssemblingFeature =
+      readAnnotationJson(spec, Annotation.VDJ.IsAssemblingFeature) ??
+      spec.annotations?.["pl7.app/isAssemblingFeature"] === "true";
+    return { default: isAssemblingFeature };
+  };
+}
 
 export function defaultFilters(tSpec: PTableColumnSpec): unknown | undefined {
   console.log("defaultFilters spec", tSpec);

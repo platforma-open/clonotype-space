@@ -1,6 +1,7 @@
 import strings from "@milaboratories/strings";
 import { kind } from "@platforma-open/milaboratories.clonotype-space.kind";
 import type {
+  AxisId,
   DataInfo,
   DatasetOption,
   InferOutputsType,
@@ -16,6 +17,7 @@ import {
   buildDatasetOptions,
   createGlobalPObjectId,
   createPFrameForGraphs,
+  getAxisId,
   isPColumnSpec,
   legacyColumnSelectorsToPredicate,
 } from "@platforma-sdk/model";
@@ -217,6 +219,14 @@ export const platforma = BlockModelV3.create({ dataModel: blockDataModel, kind }
     if (domain["pl7.app/repertoire/extractionRunId"] !== undefined) return false;
     if (domain["pl7.app/vdj/clonotypingRunId"] !== undefined) return false;
     return true;
+  })
+
+  // Key axis of the input dataset; the MSA offers only sequence columns on it.
+  .output("inputKeyAxisId", (ctx): AxisId | undefined => {
+    const ref = ctx.data.inputAnchor;
+    if (ref === undefined) return undefined;
+    const keyAxis = ctx.resultPool.getPColumnSpecByRef(ref)?.axesSpec[1];
+    return keyAxis === undefined ? undefined : getAxisId(keyAxis);
   })
 
   .output("sequenceOptions", (ctx) => {
