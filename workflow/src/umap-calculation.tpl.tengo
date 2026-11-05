@@ -1,4 +1,4 @@
-//tengo:hash_override BA521FD9-9224-4406-87E8-F80B3BDD6627
+//tengo:hash_override 2022CE1B-7146-4ABE-8980-8750A85D9EFD
 
 self := import("@platforma-sdk/workflow-tengo:tpl")
 exec := import("@platforma-sdk/workflow-tengo:exec")
