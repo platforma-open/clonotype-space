@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space.workflow
 
+## 3.10.1
+
+### Patch Changes
+
+- 28493b5: SDK upgrade: workflow-tengo 6.20.0, so the commands of a block run report the block and its run in run telemetry.
+
 ## 3.10.0
 
 ### Minor Changes
