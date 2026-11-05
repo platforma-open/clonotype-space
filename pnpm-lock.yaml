@@ -1298,7 +1298,7 @@ packages:
     resolution: {integrity: sha512-38/dW/XRZQREOxAOOKtO0lzEWPCP/DH0qhB3q1kYcGoN++5V92/zbVwbYrMDeDcjTyo+D62iIep+sKXeWHa7Uw==}
 
   '@milaboratories/sequence-viewer@file:../../core/visualizations/packages/sequence-viewer/package.tgz':
-    resolution: {integrity: sha512-k8p7Vho66wqrxkRuDiWT71K8QI5gJAQEJfGe3z2BNoRemhBIyyLOzKcR7smxFClXkX6WQ3BfbVR5OLzHfAR1Ew==, tarball: file:../../core/visualizations/packages/sequence-viewer/package.tgz}
+    resolution: {integrity: sha512-9IIYzZJbJg4YEAbz7kGsjhikT9ubuL41n/WP3qqjjJqFeHIraU/a1V24r9R4OavQ6SIfImD2TlkxBQfapGwOxw==, tarball: file:../../core/visualizations/packages/sequence-viewer/package.tgz}
     version: 0.0.0
     peerDependencies:
       '@platforma-sdk/model': 1.84.0
