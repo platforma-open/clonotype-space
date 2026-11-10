@@ -34,8 +34,8 @@ catalogs:
       specifier: 1.1.0
       version: 1.1.0
     '@platforma-sdk/block-tools':
-      specifier: 2.18.2
-      version: 2.18.2
+      specifier: 2.19.0
+      version: 2.19.0
     '@platforma-sdk/model':
       specifier: 1.85.2
       version: 1.85.2
@@ -95,7 +95,7 @@ importers:
         version: 1.7.2(@microsoft/api-extractor@7.55.2(@types/node@25.0.3))(@types/node@25.0.3)(@volar/typescript@2.4.28)(@vue/language-core@3.3.10)(esbuild@0.27.2)(rollup@4.55.1)(vue@3.5.26(typescript@5.6.3))(yaml@2.9.1)
       '@platforma-sdk/block-tools':
         specifier: 'catalog:'
-        version: 2.18.2(@types/node@25.0.3)
+        version: 2.19.0(@types/node@25.0.3)
       shx:
         specifier: 'catalog:'
         version: 0.4.0
@@ -128,7 +128,7 @@ importers:
         version: link:../workflow
       '@platforma-sdk/block-tools':
         specifier: 'catalog:'
-        version: 2.18.2(@types/node@25.0.3)
+        version: 2.19.0(@types/node@25.0.3)
       '@platforma-sdk/model':
         specifier: 'catalog:'
         version: 1.85.2
@@ -165,7 +165,7 @@ importers:
         version: 1.4.0
       '@platforma-sdk/block-tools':
         specifier: 'catalog:'
-        version: 2.18.2(@types/node@25.0.3)
+        version: 2.19.0(@types/node@25.0.3)
 
   model:
     dependencies:
@@ -196,7 +196,7 @@ importers:
         version: 1.4.0
       '@platforma-sdk/block-tools':
         specifier: 'catalog:'
-        version: 2.18.2(@types/node@25.0.3)
+        version: 2.19.0(@types/node@25.0.3)
       eslint:
         specifier: 'catalog:'
         version: 9.39.2
@@ -208,7 +208,7 @@ importers:
         version: 1.15.1
       '@platforma-sdk/block-tools':
         specifier: 'catalog:'
-        version: 2.18.2(@types/node@25.0.3)
+        version: 2.19.0(@types/node@25.0.3)
 
   test:
     dependencies:
@@ -1859,8 +1859,8 @@ packages:
     resolution: {integrity: sha512-aZ3UZnXsCqBD0aHUVF+AI8/B3qJDh3sfVDyYrfWMLU/0s57PbsNuSzhvu8gYkP5+Nze9a2svAiNiHKvcZm4CpQ==}
     hasBin: true
 
-  '@platforma-sdk/block-tools@2.18.2':
-    resolution: {integrity: sha512-mDCkK7ksAl/7kGPk3ON7gOt04dDoBQHnv256TK0tNEI4oBkJT0MePaMPJD8xUIJk5oRrnkjIdsdPuGqLcZdeBA==}
+  '@platforma-sdk/block-tools@2.19.0':
+    resolution: {integrity: sha512-YiQwYbXW2SQIyxMPRXrLS8OM7lG0EZbZ9TL6zreeQsl7/iQIM1UIw+ezcjMjwLf3l08GmKEKusAnPytG9YNDrg==}
     hasBin: true
 
   '@platforma-sdk/blocks-deps-updater@2.2.0':
@@ -1877,8 +1877,8 @@ packages:
   '@platforma-sdk/package-builder-lib@1.4.1':
     resolution: {integrity: sha512-n85dVGndxqkbNodoNJLUHBPnPquOSo3jcjY4Beq892UpMW/1u7IxkOnMR4DygcOXrjXP9zDt/MbV6LB1f9kmtg==}
 
-  '@platforma-sdk/package-builder-lib@1.5.0':
-    resolution: {integrity: sha512-zv0Y37s8FPCwBR0gGiqA+00wUtWTNt5ttVbNEsTAY2g4i6L+L3jQluMT/k0sgR/Ej6MTNajM1oPEoP1AtQWICg==}
+  '@platforma-sdk/package-builder-lib@1.6.0':
+    resolution: {integrity: sha512-8sYnPd/7MFAMLE4PKzXZ/wJ5Jn1ekqsAO45RZBi2mT7G9IhvtmJgojDmkR7lYrBzIuBrHKXTxMGHUGdbytFRfw==}
 
   '@platforma-sdk/tengo-builder@4.1.17':
     resolution: {integrity: sha512-qYwf6Q2gqjsvKQ67kbJrCTY8YCtRVjkKhD06bPQygjINnFtSO0ZMFVYbz/OZxd9gpF3LDpJOu9caSMy5ficToQ==}
@@ -9629,7 +9629,7 @@ snapshots:
       - bare-abort-controller
       - react-native-b4a
 
-  '@platforma-sdk/block-tools@2.18.2(@types/node@25.0.3)':
+  '@platforma-sdk/block-tools@2.19.0(@types/node@25.0.3)':
     dependencies:
       '@aws-sdk/client-ecr-public': 3.1157.0
       '@inquirer/prompts': 7.10.1(@types/node@25.0.3)
@@ -9640,7 +9640,7 @@ snapshots:
       '@milaboratories/resolve-helper': 1.1.3
       '@milaboratories/ts-helpers': 1.9.1
       '@platforma-sdk/blocks-deps-updater': 2.2.2
-      '@platforma-sdk/package-builder-lib': 1.5.0
+      '@platforma-sdk/package-builder-lib': 1.6.0
       canonicalize: 2.1.0
       commander: 15.0.0
       lru-cache: 11.5.3
@@ -9692,7 +9692,7 @@ snapshots:
       - bare-abort-controller
       - react-native-b4a
 
-  '@platforma-sdk/package-builder-lib@1.5.0':
+  '@platforma-sdk/package-builder-lib@1.6.0':
     dependencies:
       '@aws-sdk/client-s3': 3.1157.0
       '@aws-sdk/lib-storage': 3.1157.0(@aws-sdk/client-s3@3.1157.0)
