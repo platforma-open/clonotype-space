@@ -18,3 +18,4 @@ cucim-cu12==25.4.0; platform_system == "Linux" and platform_machine == "x86_64"
 pylibraft-cu12==25.4.0; platform_system == "Linux" and platform_machine == "x86_64"
 raft-dask-cu12==25.4.0; platform_system == "Linux" and platform_machine == "x86_64"
 cuvs-cu12==25.4.0; platform_system == "Linux" and platform_machine == "x86_64"
+# regression check of package-builder 3.17.0 layer split (MILAB-7204)
