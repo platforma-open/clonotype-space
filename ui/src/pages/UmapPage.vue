@@ -40,7 +40,7 @@ import { asyncComputed } from "@vueuse/core";
 import { computed, ref, watch } from "vue";
 
 import { useApp } from "../app";
-import { isSequenceColumn } from "../util";
+import { sequenceColumnPredicate } from "../util";
 
 const app = useApp();
 
@@ -260,6 +260,9 @@ const selection = ref<PlSelectionModel>({
   selectedKeys: [],
 });
 
+const msaSequencePredicate = computed(() =>
+  sequenceColumnPredicate(app.model.outputs.inputKeyAxisId),
+);
 const multipleSequenceAlignmentOpen = ref(false);
 const umapLogOpen = ref(false);
 
@@ -592,7 +595,7 @@ watch(
       <template #title>{{ strings.titles.multipleSequenceAlignment }}</template>
       <PlMultiSequenceAlignment
         v-model="app.model.data.alignmentModel"
-        :sequence-column-predicate="isSequenceColumn"
+        :sequence-column-predicate="msaSequencePredicate"
         :p-frame="app.model.outputs.msaPf"
         :selection="selection"
       />
