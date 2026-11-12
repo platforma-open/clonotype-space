@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.clonotype-space
 
+## 3.11.1
+
+### Patch Changes
+
+- c6f2b56: Set last block version to stable
+
 ## 3.11.0
 
 ### Minor Changes
