@@ -15,9 +15,9 @@ catalog:
   "@platforma-sdk/model": 1.89.0
   "@platforma-sdk/ui-vue": 1.89.0
   "@platforma-sdk/tengo-builder": 4.1.21
-  "@platforma-sdk/package-builder": 3.17.0
+  "@platforma-sdk/package-builder": 3.18.0
   "@platforma-sdk/block-kind": 1.1.1
-  "@platforma-sdk/block-tools": 2.19.1
+  "@platforma-sdk/block-tools": 2.20.0
   "@platforma-sdk/test": 1.89.0
   "@milaboratories/helpers": 1.14.7
   "@milaboratories/graph-maker": 1.10.1
