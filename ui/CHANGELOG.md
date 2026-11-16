@@ -1,5 +1,13 @@
 # @platforma-open/milaboratories.clonotype-space.ui
 
+## 3.11.2
+
+### Patch Changes
+
+- cfab465: update sdk
+- Updated dependencies [cfab465]
+  - @platforma-open/milaboratories.clonotype-space.model@3.11.2
+
 ## 3.11.1
 
 ### Patch Changes
