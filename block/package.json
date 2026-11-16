@@ -49,7 +49,7 @@
       "support": "mailto:support@milaboratories.com",
       "description": "Visualize sequence relationships (clonotypes or peptides) using k-mer-based dimensionality reduction and UMAP projection.",
       "longDescription": "file:../docs/description.md",
-      "changelog": "file:../CHANGELOG.md",
+      "changelog": "file:CHANGELOG.md",
       "tags": [
         "airr",
         "downstream",
