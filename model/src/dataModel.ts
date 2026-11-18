@@ -1,6 +1,5 @@
 import { kind } from "@platforma-open/milaboratories.clonotype-space.kind";
 import { DataModelBuilder } from "@platforma-sdk/model";
-import { transferableGraphState } from "@milaboratories/graph-maker/plugin";
 import type { BlockData, LegacyBlockArgs, LegacyBlockUiState } from "./types";
 import { umapPlugin } from "./plugins";
 
@@ -40,11 +39,11 @@ export const blockDataModel = new DataModelBuilder({ kind })
     graphStateUMAP: uiState?.graphStateUMAP ?? defaultGraphState(),
     alignmentModel: uiState?.alignmentModel ?? {},
   }))
-  // A chart saved before the UMAP became a plugin instance: hand the plugin
-  // what survives the move. The data mapping does not — the old ids name
-  // columns in a frame built the old way — so it is left to `defaultOptions`.
+  // A chart saved before the UMAP became a plugin instance moves over whole:
+  // the plugin's frame registers a column under the same id the old one did, so
+  // the saved data mapping still names real columns.
   .transfer(umapPlugin, (data) => ({
-    state: transferableGraphState(data.graphStateUMAP),
+    state: data.graphStateUMAP,
     chartType: "scatterplot-umap" as const,
     readonlyInputs: [],
     allowChartDeleting: false,
