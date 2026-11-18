@@ -49,6 +49,11 @@ export const blockDataModel = new DataModelBuilder({ kind })
     allowChartDeleting: false,
     allowTitleEditing: false,
   }))
+  // The data is unchanged; the version bump is the point. `DataModel.migrate`
+  // takes a fast path when the stored version is already the latest one, and
+  // that path returns no transfers at all — so without a step to run, the
+  // chart above would be handed nothing and start from its config defaults.
+  .migrate<BlockData>("V20261118", (data) => data)
   // `params` is absent when a block is created by hand rather than from a
   // template, so every field the contract carries keeps its own default.
   // `graphStateUMAP` and `alignmentModel` are outside the contract — they are
