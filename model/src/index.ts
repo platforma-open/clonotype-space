@@ -87,7 +87,7 @@ export const platforma = BlockModelV3.create({ dataModel: blockDataModel, kind }
   // The workflow's UMAP columns are the anchors; the plugin discovers what else
   // in the project binds to them, and brings their labels and linkers.
   .plugin(umapPlugin, {
-    anchorColumns: (ctx) => ctx.outputs?.resolve("umapPf")?.getPColumns(),
+    anchorColumns: (ctx) => ctx.outputs?.resolve("umapPf"),
   })
 
   // Inverse of `init` — the same fields, projected back out for template export.
