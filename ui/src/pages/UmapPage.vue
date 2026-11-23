@@ -34,7 +34,7 @@ import {
   PlTextField,
 } from "@platforma-sdk/ui-vue";
 
-import type { GraphMakerPluginExposed, PredefinedGraphOption } from "@milaboratories/graph-maker";
+import type { PredefinedGraphOption } from "@milaboratories/graph-maker";
 import { GraphMakerPlugin } from "@milaboratories/graph-maker";
 import { asyncComputed } from "@vueuse/core";
 import { computed, ref, watch } from "vue";
@@ -320,27 +320,15 @@ watch(
   },
   { immediate: true },
 );
-
-const umapChart = ref<GraphMakerPluginExposed | null>(null);
-
-// Auto-close settings panel when the block transitions to running.
-watch(
-  () => app.model.outputs.isRunning,
-  (isRunning, wasRunning) => {
-    if (isRunning && !wasRunning) {
-      umapChart.value?.closeSettings();
-    }
-  },
-);
 </script>
 
 <template>
   <PlBlockPage no-body-gutters>
     <GraphMakerPlugin
-      ref="umapChart"
       v-model:selection="selection"
       :handle="app.plugins.umap.handle"
       :default-options="defaultOptions"
+      :block-is-running="app.model.outputs.isRunning"
       :status-text="{ noPframe: { title: strings.callToActions.configureSettingsAndRun } }"
     >
       <template #titleLineSlot>
