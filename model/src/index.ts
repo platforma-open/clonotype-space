@@ -8,7 +8,6 @@ import type {
   PColumn,
   PColumnIdAndSpec,
   PColumnValues,
-  PFrameHandle,
   RenderCtxBase,
   TreeNodeAccessor,
 } from "@platforma-sdk/model";
@@ -22,6 +21,7 @@ import {
   legacyColumnSelectorsToPredicate,
 } from "@platforma-sdk/model";
 import { blockDataModel } from "./dataModel";
+import { umapPlugin } from "./plugins";
 import { getDefaultBlockLabel } from "./label";
 import type { BlockArgs, BlockData } from "./types";
 
@@ -83,6 +83,12 @@ function getAnchoredClonotypeProps(
 }
 
 export const platforma = BlockModelV3.create({ dataModel: blockDataModel, kind })
+
+  // The workflow's UMAP columns are the anchors; the plugin discovers what else
+  // in the project binds to them, and brings their labels and linkers.
+  .plugin(umapPlugin, {
+    anchorColumns: (ctx) => ctx.outputs?.resolve("umapPf"),
+  })
 
   // Inverse of `init` — the same fields, projected back out for template export.
   // `graphStateUMAP` and `alignmentModel` are view state and never cross the
@@ -387,12 +393,6 @@ export const platforma = BlockModelV3.create({ dataModel: blockDataModel, kind }
     const props = getAnchoredClonotypeProps(ctx);
     if (!props) return undefined;
     return createPFrameForGraphs(ctx, props);
-  })
-
-  .outputWithStatus("umapPf", (ctx): PFrameHandle | undefined => {
-    const pCols = ctx.outputs?.resolve("umapPf")?.getPColumns();
-    if (pCols === undefined) return undefined;
-    return createPFrameForGraphs(ctx, pCols);
   })
 
   .output("umapOutput", (ctx) => ctx.outputs?.resolve("umapOutput")?.getLogHandle())

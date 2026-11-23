@@ -1,6 +1,7 @@
 import { kind } from "@platforma-open/milaboratories.clonotype-space.kind";
 import { DataModelBuilder } from "@platforma-sdk/model";
 import type { BlockData, LegacyBlockArgs, LegacyBlockUiState } from "./types";
+import { umapPlugin } from "./plugins";
 
 const defaultGraphState = (): BlockData["graphStateUMAP"] => ({
   title: "Sequence Space UMAP",
@@ -38,6 +39,21 @@ export const blockDataModel = new DataModelBuilder({ kind })
     graphStateUMAP: uiState?.graphStateUMAP ?? defaultGraphState(),
     alignmentModel: uiState?.alignmentModel ?? {},
   }))
+  // A chart saved before the UMAP became a plugin instance moves over whole:
+  // the plugin's frame registers a column under the same id the old one did, so
+  // the saved data mapping still names real columns.
+  .transfer(umapPlugin, (data) => ({
+    state: data.graphStateUMAP,
+    chartType: "scatterplot-umap" as const,
+    readonlyInputs: [],
+    allowChartDeleting: false,
+    allowTitleEditing: false,
+  }))
+  // The data is unchanged; the version bump is the point. `DataModel.migrate`
+  // takes a fast path when the stored version is already the latest one, and
+  // that path returns no transfers at all — so without a step to run, the
+  // chart above would be handed nothing and start from its config defaults.
+  .migrate<BlockData>("V20261118", (data) => data)
   // `params` is absent when a block is created by hand rather than from a
   // template, so every field the contract carries keeps its own default.
   // `graphStateUMAP` and `alignmentModel` are outside the contract — they are
